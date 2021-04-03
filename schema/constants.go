@@ -95,16 +95,16 @@ const (
 )
 
 const (
-	CoinAPIOpenBazaarBTC = "https://btc.api.openbazaar.org/api"
-	CoinAPIOpenBazaarBCH = "https://bch.api.openbazaar.org/api"
-	CoinAPIOpenBazaarLTC = "https://ltc.api.openbazaar.org/api"
-	CoinAPIOpenBazaarZEC = "https://zec.api.openbazaar.org/api"
+	CoinAPIOpenBazaarBTC = "https://btc1.trezor.io/api"
+	CoinAPIOpenBazaarBCH = "https://bch1.trezor.io/api"
+	CoinAPIOpenBazaarLTC = "https://ltc1.trezor.io/api"
+	CoinAPIOpenBazaarZEC = "https://zec1.trezor.io/api"
 	CoinAPIOpenBazaarETH = "https://mainnet.infura.io"
 
-	CoinAPIOpenBazaarTBTC = "https://tbtc.api.openbazaar.org/api"
-	CoinAPIOpenBazaarTBCH = "https://tbch.api.openbazaar.org/api"
-	CoinAPIOpenBazaarTLTC = "https://tltc.api.openbazaar.org/api"
-	CoinAPIOpenBazaarTZEC = "https://tzec.api.openbazaar.org/api"
+	CoinAPIOpenBazaarTBTC = "https://tbtc1.trezor.io/api"
+	CoinAPIOpenBazaarTBCH = "https://tbch1.trezor.io/api"
+	CoinAPIOpenBazaarTLTC = "https://tltc1.trezor.io/api"
+	CoinAPIOpenBazaarTZEC = "https://tzec1.trezor.io/api"
 	CoinAPIOpenBazaarTETH = "https://rinkeby.infura.io"
 )
 

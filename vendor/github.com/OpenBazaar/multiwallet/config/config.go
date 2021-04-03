@@ -90,14 +90,14 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://btc.api.openbazaar.org/api",
+				"https://btc1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://btc.bloqapi.net/insight-api",
 				//"https://btc.insight.openbazaar.org/insight-api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tbtc.api.openbazaar.org/api",
+				"https://tbtc1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://test-insight.bitpay.com/api",
 			}
@@ -121,13 +121,13 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://bch.api.openbazaar.org/api",
+				"https://bch1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://bitcoincash.blockexplorer.com/api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tbch.api.openbazaar.org/api",
+				"https://tbch1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://test-bch-insight.bitpay.com/api",
 			}
@@ -150,13 +150,13 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://zec.api.openbazaar.org/api",
+				"https://zec1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://zcashnetwork.info/api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tzec.api.openbazaar.org/api",
+				"https://tzec1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://explorer.testnet.z.cash/api",
 			}
@@ -179,14 +179,14 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://ltc.api.openbazaar.org/api",
+				"https://ltc1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://ltc.coin.space/api",
 				//"https://ltc.insight.openbazaar.org/insight-lite-api",
 			}
 		} else {
 			apiEndpoints = []string{
-				"https://tltc.api.openbazaar.org/api",
+				"https://tltc1.trezor.io/api",
 				// temporarily deprecated Insight endpoints
 				//"https://testnet.litecore.io/api",
 			}
