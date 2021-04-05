@@ -25,7 +25,41 @@ const preMigration034Config = `{
 		]
 	},
 	"OtherConfigProperty1": [1, 2, 3],
-	"OtherConfigProperty2": "abc123"
+	"OtherConfigProperty2": "abc123",
+	"Wallets": {
+        "BCH": {
+            "API": [
+                "https://bch.api.openbazaar.org/api"
+            ],
+            "APITestnet": [
+                "https://tbch.api.openbazaar.org/api"
+            ]
+        },
+		"BTC": {
+            "API": [
+                "https://btc.api.openbazaar.org/api"
+            ],
+            "APITestnet": [
+                "https://tbtc.api.openbazaar.org/api"
+            ]
+        },
+        "LTC": {
+            "API": [
+                "https://ltc.api.openbazaar.org/api"
+            ],
+            "APITestnet": [
+                "https://tltc.api.openbazaar.org/api"
+            ]
+        },
+        "ZEC": {
+            "API": [
+                "https://zec.api.openbazaar.org/api"
+            ],
+            "APITestnet": [
+                "https://tzec.api.openbazaar.org/api"
+            ]
+        }
+    }
 }`
 
 const postMigration034Config = `{
@@ -47,7 +81,41 @@ const postMigration034Config = `{
 		]
 	},
 	"OtherConfigProperty1": [1, 2, 3],
-	"OtherConfigProperty2": "abc123"
+	"OtherConfigProperty2": "abc123",
+	"Wallets": {
+        "BCH": {
+            "API": [
+                "https://bch1.trezor.io/api"
+            ],
+            "APITestnet": [
+                "https://tbch1.trezor.io/api"
+            ]
+        },
+        "BTC": {
+            "API": [
+                "https://btc1.trezor.io/api"
+            ],
+            "APITestnet": [
+                "https://tbtc1.trezor.io/api"
+            ]
+        },
+        "LTC": {
+            "API": [
+                "https://ltc1.trezor.io/api"
+            ],
+            "APITestnet": [
+                "https://tltc1.trezor.io/api"
+            ]
+        },
+        "ZEC": {
+            "API": [
+                "https://zec1.trezor.io/api"
+            ],
+            "APITestnet": [
+                "https://tzec1.trezor.io/api"
+            ]
+        }
+    }
 }`
 
 func TestMigration034(t *testing.T) {

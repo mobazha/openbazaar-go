@@ -2,6 +2,7 @@ package migrations
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -65,6 +66,68 @@ func (Migration034) Up(repoPath, dbPassword string, testnet bool) error {
 	configMap["DataSharing"] = migration034DataSharing{PushTo: Migration034PushToAfter}
 	configMap["Bootstrap"] = Migration034BootstrapAfter
 
+	c, ok := configMap["Wallets"]
+	if !ok {
+		return errors.New("invalid config: missing key Wallets")
+	}
+
+	walletCfg, ok := c.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid key Wallets")
+	}
+
+	btc, ok := walletCfg["BTC"]
+	if !ok {
+		return errors.New("invalid config: missing BTC Wallet")
+	}
+
+	btcWalletCfg, ok := btc.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid BTC Wallet")
+	}
+
+	btcWalletCfg["API"] = []string{"https://btc1.trezor.io/api"}
+	btcWalletCfg["APITestnet"] = []string{"https://tbtc1.trezor.io/api"}
+
+	bch, ok := walletCfg["BCH"]
+	if !ok {
+		return errors.New("invalid config: missing BCH Wallet")
+	}
+
+	bchWalletCfg, ok := bch.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid BCH Wallet")
+	}
+
+	bchWalletCfg["API"] = []string{"https://bch1.trezor.io/api"}
+	bchWalletCfg["APITestnet"] = []string{"https://tbch1.trezor.io/api"}
+
+	ltc, ok := walletCfg["LTC"]
+	if !ok {
+		return errors.New("invalid config: missing LTC Wallet")
+	}
+
+	ltcWalletCfg, ok := ltc.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid LTC Wallet")
+	}
+
+	ltcWalletCfg["API"] = []string{"https://ltc1.trezor.io/api"}
+	ltcWalletCfg["APITestnet"] = []string{"https://tltc1.trezor.io/api"}
+
+	zec, ok := walletCfg["ZEC"]
+	if !ok {
+		return errors.New("invalid config: missing ZEC Wallet")
+	}
+
+	zecWalletCfg, ok := zec.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid ZEC Wallet")
+	}
+
+	zecWalletCfg["API"] = []string{"https://zec1.trezor.io/api"}
+	zecWalletCfg["APITestnet"] = []string{"https://tzec1.trezor.io/api"}
+
 	newConfigBytes, err := json.MarshalIndent(configMap, "", "    ")
 	if err != nil {
 		return fmt.Errorf("marshal migrated config: %s", err.Error())
@@ -95,6 +158,68 @@ func (Migration034) Down(repoPath, dbPassword string, testnet bool) error {
 
 	configMap["DataSharing"] = migration034DataSharing{PushTo: Migration034PushToBefore}
 	configMap["Bootstrap"] = Migration034BootstrapBefore
+
+	c, ok := configMap["Wallets"]
+	if !ok {
+		return errors.New("invalid config: missing key Wallets")
+	}
+
+	walletCfg, ok := c.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid key Wallets")
+	}
+
+	btc, ok := walletCfg["BTC"]
+	if !ok {
+		return errors.New("invalid config: missing BTC Wallet")
+	}
+
+	btcWalletCfg, ok := btc.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid BTC Wallet")
+	}
+
+	btcWalletCfg["API"] = []string{"https://btc.api.openbazaar.org/api"}
+	btcWalletCfg["APITestnet"] = []string{"https://tbtc.api.openbazaar.org/api"}
+
+	bch, ok := walletCfg["BCH"]
+	if !ok {
+		return errors.New("invalid config: missing BCH Wallet")
+	}
+
+	bchWalletCfg, ok := bch.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid BCH Wallet")
+	}
+
+	bchWalletCfg["API"] = []string{"https://bch.api.openbazaar.org/api"}
+	bchWalletCfg["APITestnet"] = []string{"https://tbch.api.openbazaar.org/api"}
+
+	ltc, ok := walletCfg["LTC"]
+	if !ok {
+		return errors.New("invalid config: missing LTC Wallet")
+	}
+
+	ltcWalletCfg, ok := ltc.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid LTC Wallet")
+	}
+
+	ltcWalletCfg["API"] = []string{"https://ltc.api.openbazaar.org/api"}
+	ltcWalletCfg["APITestnet"] = []string{"https://tltc.api.openbazaar.org/api"}
+
+	zec, ok := walletCfg["ZEC"]
+	if !ok {
+		return errors.New("invalid config: missing ZEC Wallet")
+	}
+
+	zecWalletCfg, ok := zec.(map[string]interface{})
+	if !ok {
+		return errors.New("invalid config: invalid ZEC Wallet")
+	}
+
+	zecWalletCfg["API"] = []string{"https://zec.api.openbazaar.org/api"}
+	zecWalletCfg["APITestnet"] = []string{"https://tzec.api.openbazaar.org/api"}
 
 	newConfigBytes, err := json.MarshalIndent(configMap, "", "    ")
 	if err != nil {
