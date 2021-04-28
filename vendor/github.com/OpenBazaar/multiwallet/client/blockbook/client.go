@@ -217,6 +217,7 @@ func (i *BlockBookClient) doRequest(endpoint, method string, body []byte, query 
 		return nil, fmt.Errorf("creating: %s", err.Error())
 	}
 	req.Header.Add("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "mobazha")
 
 	resp, err := i.HTTPClient.Do(req)
 	if err != nil {
