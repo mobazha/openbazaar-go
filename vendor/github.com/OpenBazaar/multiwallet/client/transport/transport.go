@@ -2,13 +2,14 @@ package transport
 
 import (
 	"errors"
-	tp "github.com/OpenBazaar/golang-socketio/transport"
-	"github.com/gorilla/websocket"
-	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"time"
+
+	tp "github.com/OpenBazaar/golang-socketio/transport"
+	"github.com/gorilla/websocket"
+	"golang.org/x/net/proxy"
 )
 
 const (
@@ -137,6 +138,9 @@ func (wst *WebsocketTransport) Serve(w http.ResponseWriter, r *http.Request) {}
 Returns websocket connection with default params
 */
 func GetDefaultWebsocketTransport(proxyDialer proxy.Dialer) *WebsocketTransport {
+	requestHeader := make(http.Header)
+	requestHeader.Set("User-Agent", "mobazha")
+
 	return &WebsocketTransport{
 		PingInterval:   WsDefaultPingInterval,
 		PingTimeout:    WsDefaultPingTimeout,
@@ -144,5 +148,6 @@ func GetDefaultWebsocketTransport(proxyDialer proxy.Dialer) *WebsocketTransport 
 		SendTimeout:    WsDefaultSendTimeout,
 		BufferSize:     WsDefaultBufferSize,
 		proxyDialer:    proxyDialer,
+		RequestHeader:  requestHeader,
 	}
 }
