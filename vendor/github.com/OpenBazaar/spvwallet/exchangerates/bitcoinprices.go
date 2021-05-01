@@ -54,7 +54,7 @@ func NewBitcoinPriceFetcher(dialer proxy.Dialer) *BitcoinPriceFetcher {
 	client := &http.Client{Transport: tbTransport, Timeout: time.Minute}
 
 	b.providers = []*ExchangeRateProvider{
-		{"https://ticker.openbazaar.org/api", b.cache, client, BitcoinAverageDecoder{}},
+		{"https://market.mobazha.com/api/ticker", b.cache, client, BitcoinAverageDecoder{}},
 		{"https://bitpay.com/api/rates", b.cache, client, BitPayDecoder{}},
 		{"https://blockchain.info/ticker", b.cache, client, BlockchainInfoDecoder{}},
 		{"https://api.bitcoincharts.com/v1/weighted_prices.json", b.cache, client, BitcoinChartsDecoder{}},

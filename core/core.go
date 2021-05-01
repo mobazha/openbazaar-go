@@ -186,7 +186,7 @@ func (n *OpenBazaarNode) publish(hash string) {
 	go func() {
 		// Update search endpoint with published hash
 		peerId, _ := n.GetNodeID()
-		endpoint := fmt.Sprintf("https://search.ob1.io/update/%s/%s", peerId.PeerID, hash)
+		endpoint := fmt.Sprintf("https://market.mobazha.com/api/search/update/%s/%s", peerId.PeerID, hash)
 		log.Infof("Publishing new rootHash to: %s\n", endpoint)
 
 		var client *http.Client
