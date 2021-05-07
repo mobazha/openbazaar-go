@@ -101,10 +101,10 @@ const (
 )
 
 const (
-	CoinAPIOpenBazaarBTC = "https://btc1.trezor.io/api"
-	CoinAPIOpenBazaarBCH = "https://bch1.trezor.io/api"
-	CoinAPIOpenBazaarLTC = "https://ltc1.trezor.io/api"
-	CoinAPIOpenBazaarZEC = "https://zec1.trezor.io/api"
+	CoinAPIOpenBazaarBTC = "https://btc1.mobazha.com/api"
+	CoinAPIOpenBazaarBCH = "https://bch1.mobazha.com/api"
+	CoinAPIOpenBazaarLTC = "https://ltc1.mobazha.com/api"
+	CoinAPIOpenBazaarZEC = "https://zec1.mobazha.com/api"
 	CoinAPIOpenBazaarETH = "https://mainnet.infura.io"
 
 	CoinAPIOpenBazaarTBTC = "https://tbtc1.trezor.io/api"

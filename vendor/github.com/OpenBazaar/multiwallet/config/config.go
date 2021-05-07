@@ -90,7 +90,7 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://btc1.trezor.io/api",
+				"https://btc1.mobazha.com/api",
 				// temporarily deprecated Insight endpoints
 				//"https://btc.bloqapi.net/insight-api",
 				//"https://btc.insight.openbazaar.org/insight-api",
@@ -121,7 +121,7 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://bch1.trezor.io/api",
+				"https://bch1.mobazha.com/api",
 				// temporarily deprecated Insight endpoints
 				//"https://bitcoincash.blockexplorer.com/api",
 			}
@@ -150,7 +150,7 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://zec1.trezor.io/api",
+				"https://zec1.mobazha.com/api",
 				// temporarily deprecated Insight endpoints
 				//"https://zcashnetwork.info/api",
 			}
@@ -179,7 +179,7 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		var apiEndpoints []string
 		if !testnet {
 			apiEndpoints = []string{
-				"https://ltc1.trezor.io/api",
+				"https://ltc1.mobazha.com/api",
 				// temporarily deprecated Insight endpoints
 				//"https://ltc.coin.space/api",
 				//"https://ltc.insight.openbazaar.org/insight-lite-api",
