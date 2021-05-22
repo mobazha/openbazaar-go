@@ -106,12 +106,14 @@ const (
 	CoinAPIOpenBazaarLTC = "https://ltc1.mobazha.com/api"
 	CoinAPIOpenBazaarZEC = "https://zec1.mobazha.com/api"
 	CoinAPIOpenBazaarETH = "https://mainnet.infura.io"
+	CoinAPIOpenBazaarCFX = "https://main.confluxrpc.com"
 
 	CoinAPIOpenBazaarTBTC = "https://tbtc1.trezor.io/api"
 	CoinAPIOpenBazaarTBCH = "https://tbch1.trezor.io/api"
 	CoinAPIOpenBazaarTLTC = "https://tltc1.trezor.io/api"
 	CoinAPIOpenBazaarTZEC = "https://tzec1.trezor.io/api"
 	CoinAPIOpenBazaarTETH = "https://rinkeby.infura.io"
+	CoinAPIOpenBazaarTCFX = "https://test.confluxrpc.com"
 )
 
 var (
@@ -120,10 +122,12 @@ var (
 	CoinPoolLTC = []string{CoinAPIOpenBazaarLTC}
 	CoinPoolZEC = []string{CoinAPIOpenBazaarZEC}
 	CoinPoolETH = []string{CoinAPIOpenBazaarETH}
+	CoinPoolCFX = []string{CoinAPIOpenBazaarCFX}
 
 	CoinPoolTBTC = []string{CoinAPIOpenBazaarTBTC}
 	CoinPoolTBCH = []string{CoinAPIOpenBazaarTBCH}
 	CoinPoolTLTC = []string{CoinAPIOpenBazaarTLTC}
 	CoinPoolTZEC = []string{CoinAPIOpenBazaarTZEC}
 	CoinPoolTETH = []string{CoinAPIOpenBazaarTETH}
+	CoinPoolTCFX = []string{CoinAPIOpenBazaarTCFX}
 )

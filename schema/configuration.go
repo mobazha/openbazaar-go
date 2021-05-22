@@ -36,6 +36,7 @@ type WalletsConfig struct {
 	LTC *CoinConfig `json:"LTC"`
 	ZEC *CoinConfig `json:"ZEC"`
 	ETH *CoinConfig `json:"ETH"`
+	CFX *CoinConfig `json:"CFX"`
 }
 
 type CoinConfig struct {
@@ -129,6 +130,17 @@ func DefaultWalletsConfig() *WalletsConfig {
 			HighFeeDefault:   30,
 			MaxFee:           200,
 			WalletOptions:    EthereumDefaultOptions(),
+		},
+		CFX: &CoinConfig{
+			Type:             WalletTypeAPI,
+			APIPool:          CoinPoolCFX,
+			APITestnetPool:   CoinPoolTCFX,
+			FeeAPI:           "", // intentionally blank
+			LowFeeDefault:    7,
+			MediumFeeDefault: 15,
+			HighFeeDefault:   30,
+			MaxFee:           200,
+			WalletOptions:    nil,
 		},
 	}
 }
