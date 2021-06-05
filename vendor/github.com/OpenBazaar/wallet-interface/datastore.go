@@ -24,12 +24,14 @@ const (
 	Zcash                = 133
 	BitcoinCash          = 145
 	Ethereum             = 60
+	Conflux              = 503
 
 	TestnetBitcoin     = 1000000
 	TestnetLitecoin    = 1000001
 	TestnetZcash       = 1000133
 	TestnetBitcoinCash = 1000145
 	TestnetEthereum    = 1000060
+	TestnetConflux     = 1000503
 )
 
 func (c *CoinType) String() string {
@@ -44,6 +46,8 @@ func (c *CoinType) String() string {
 		return "Litecoin"
 	case Ethereum:
 		return "Ethereum"
+	case Conflux:
+		return "Conflux"
 	case TestnetBitcoin:
 		return "Testnet Bitcoin"
 	case TestnetBitcoinCash:
@@ -54,6 +58,8 @@ func (c *CoinType) String() string {
 		return "Testnet Litecoin"
 	case TestnetEthereum:
 		return "Testnet Ethereum"
+	case TestnetConflux:
+		return "Testnet Conflux"
 	default:
 		return ""
 	}
@@ -71,6 +77,8 @@ func (c *CoinType) CurrencyCode() string {
 		return "LTC"
 	case Ethereum:
 		return "ETH"
+	case Conflux:
+		return "CFX"
 	case TestnetBitcoin:
 		return "TBTC"
 	case TestnetBitcoinCash:
@@ -81,6 +89,8 @@ func (c *CoinType) CurrencyCode() string {
 		return "TLTC"
 	case TestnetEthereum:
 		return "TETH"
+	case TestnetConflux:
+		return "TCFX"
 	default:
 		return ""
 	}

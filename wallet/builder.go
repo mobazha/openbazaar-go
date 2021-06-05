@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	cfx "github.com/OpenBazaar/go-cfxwallet/wallet"
 	eth "github.com/OpenBazaar/go-ethwallet/wallet"
 	"github.com/OpenBazaar/multiwallet"
 	"github.com/OpenBazaar/multiwallet/bitcoin"
@@ -89,6 +90,7 @@ func NewMultiWallet(cfg *WalletConfig) (multiwallet.MultiWallet, error) {
 		enableAPIWallet[wallet.Litecoin] = cfg.ConfigFile.LTC
 	}
 	enableAPIWallet[wallet.Ethereum] = cfg.ConfigFile.ETH
+	enableAPIWallet[wallet.Conflux] = cfg.ConfigFile.CFX
 
 	var newMultiwallet = make(multiwallet.MultiWallet)
 	for coin, coinConfig := range enableAPIWallet {
@@ -174,6 +176,17 @@ func createAPIWallet(coin wallet.CoinType, coinConfigOverrides *schema.CoinConfi
 		}
 		//actualCoin = wallet.Ethereum
 		w, err := eth.NewEthereumWallet(*coinConfig, cfg.Params, cfg.Mnemonic, cfg.Proxy)
+		if err != nil {
+			return InvalidCoinType, nil, err
+		}
+		return actualCoin, w, nil
+	case wallet.Conflux:
+		if testnet {
+			actualCoin = wallet.TestnetConflux
+		} else {
+			actualCoin = wallet.Conflux
+		}
+		w, err := cfx.NewConfluxWallet(*coinConfig, cfg.Mnemonic, cfg.RepoPath, cfg.Proxy)
 		if err != nil {
 			return InvalidCoinType, nil, err
 		}
@@ -300,6 +313,8 @@ func prepareAPICoinConfig(coin wallet.CoinType, override *schema.CoinConfig, wal
 	case wallet.Ethereum:
 		defaultConfig = defaultConfigSet.ETH
 		defaultCoinOptions = schema.EthereumDefaultOptions()
+	case wallet.Conflux:
+		defaultConfig = defaultConfigSet.CFX
 	}
 
 	if testnet {
