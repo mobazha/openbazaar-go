@@ -95,6 +95,22 @@ func (client *CfxClient) EstimateTxnGas(from, to cfxaddress.Address, value *hexu
 	return utx.Gas, nil
 }
 
+// EstimateGasSpend - returns estimated gas
+func (client *CfxClient) EstimateGasSpend(from cfxaddress.Address, value *hexutil.Big) (*hexutil.Big, error) {
+	// gas := big.NewInt(0)
+	// gasPrice, err := client.SuggestGasPrice(context.Background())
+	// if err != nil {
+	// 	return gas, err
+	// }
+	// msg := ethereum.CallMsg{From: from, Value: value}
+	// gasLimit, err := client.EstimateGas(context.Background(), msg)
+	// if err != nil {
+	// 	return gas, err
+	// }
+	// return gas.Mul(big.NewInt(int64(gasLimit)), gasPrice), nil
+	return nil, nil
+}
+
 // GetTxnNonce - used to fetch nonce for a submitted txn
 func (client *CfxClient) GetTxnNonce(txID string) (int32, error) {
 	txnsLock.Lock()
@@ -105,6 +121,24 @@ func (client *CfxClient) GetTxnNonce(txID string) (int32, error) {
 		}
 	}
 	return 0, errors.New("nonce not found")
+}
+
+type CfxGasStationData struct {
+	Average     float64 `json:"average"`
+	FastestWait float64 `json:"fastestWait"`
+	FastWait    float64 `json:"fastWeight"`
+	Fast        float64 `json:"Fast"`
+	SafeLowWait float64 `json:"safeLowWait"`
+	BlockNum    int64   `json:"blockNum"`
+	AvgWait     float64 `json:"avgWait"`
+	BlockTime   float64 `json:"block_time"`
+	Speed       float64 `json:"speed"`
+	Fastest     float64 `json:"fastest"`
+	SafeLow     float64 `json:"safeLow"`
+}
+
+func (client *CfxClient) GetCfxGasStationEstimate() (*CfxGasStationData, error) {
+	return &CfxGasStationData{}, nil
 }
 
 func init() {

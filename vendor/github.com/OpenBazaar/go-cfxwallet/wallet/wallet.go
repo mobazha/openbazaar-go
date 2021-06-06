@@ -20,6 +20,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-sdk/utils"
 	"github.com/OpenBazaar/go-ethwallet/util"
 	mwConfig "github.com/OpenBazaar/multiwallet/config"
+	ut "github.com/OpenBazaar/openbazaar-go/util"
 	wi "github.com/OpenBazaar/wallet-interface"
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -99,7 +100,7 @@ func DeserializeCfxScript(b []byte) (CfxRedeemScript, error) {
 
 // PendingTxn used to record a pending cfx txn
 type PendingTxn struct {
-	TxnID     common.Hash
+	TxnID     types.Hash
 	OrderID   string
 	Amount    string
 	Nonce     int32
@@ -196,6 +197,99 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 	er := NewConfluxPriceFetcher(proxy)
 
 	return &ConfluxWallet{cfg, client, account, nil, &CfxAddress{address}, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
+}
+
+// Start will start the wallet daemon
+func (wallet *ConfluxWallet) Start() {
+	done = make(chan bool)
+	doneBalanceTicker = make(chan bool)
+	// start the ticker to check for pending txn rcpts
+	go func(wallet *ConfluxWallet) {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				// get the pending txns
+				txns, err := wallet.db.Txns().GetAll(true)
+				if err != nil {
+					continue
+				}
+				for _, txn := range txns {
+					hash := types.Hash(txn.Txid)
+					go func(txnData []byte) {
+						_, err := wallet.checkTxnRcpt(hash, txnData)
+						if err != nil {
+							log.Errorf(err.Error())
+						}
+					}(txn.Bytes)
+				}
+			}
+		}
+	}(wallet)
+
+	// start the ticker to check for balance
+	go func(wallet *ConfluxWallet) {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		currentBalance, err := wallet.GetBalance()
+		if err != nil {
+			log.Infof("err fetching initial balance: %v", err)
+		}
+		currentTip, _ := wallet.ChainTip()
+
+		for {
+			select {
+			case <-doneBalanceTicker:
+				return
+			case <-ticker.C:
+				// fetch the current balance
+				fetchedBalance, err := wallet.GetBalance()
+				if err != nil {
+					log.Infof("err fetching balance at %v: %v", time.Now(), err)
+					continue
+				}
+				if fetchedBalance.Cmp(currentBalance) != 0 {
+					// process balance change
+					go wallet.processBalanceChange(currentBalance, fetchedBalance, currentTip)
+					currentTip, _ = wallet.ChainTip()
+					currentBalance = fetchedBalance
+				}
+			}
+		}
+	}(wallet)
+}
+
+func (wallet *ConfluxWallet) processBalanceChange(previousBalance, currentBalance *big.Int, currentHead uint32) {
+	count := 0
+	cTip := int(currentHead)
+	value := new(big.Int).Sub(currentBalance, previousBalance)
+	for count < 30 {
+		txns, err := wallet.TransactionsFromEpoch(&cTip)
+		if err == nil && len(txns) > 0 {
+			count = 30
+			txncb := wi.TransactionCallback{
+				Txid:      util.EnsureCorrectPrefix(txns[0].Txid),
+				Outputs:   []wi.TransactionOutput{},
+				Inputs:    []wi.TransactionInput{},
+				Height:    txns[0].Height,
+				Timestamp: time.Now(),
+				Value:     *value,
+				WatchOnly: false,
+			}
+			for _, l := range wallet.listeners {
+				go l(txncb)
+			}
+			continue
+		}
+
+		time.Sleep(2 * time.Second)
+		count++
+	}
 }
 
 // Close will stop the wallet daemon
@@ -532,6 +626,95 @@ func (wallet *ConfluxWallet) HasKey(addr btcutil.Address) bool {
 	return wallet.address.String() == addr.String()
 }
 
+// Transfer will transfer the amount from this wallet to the spec address
+func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, fee big.Int) (types.Hash, error) {
+	networkID, _ := wallet.client.GetNetworkID()
+	toAddress, err := cfxaddress.New(to, networkID)
+	if err != nil {
+		return "", err
+	}
+
+	val := hexutil.Big(*value)
+	feeVal := hexutil.Big(fee)
+	return wallet.client.Transfer(*wallet.address.address, toAddress, &val, spendAll, &feeVal)
+}
+
+// Spend - Send ether to an external wallet
+func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel, referenceID string, spendAll bool) (*chainhash.Hash, error) {
+	var hash types.Hash
+	var h *chainhash.Hash
+	var err error
+	actualRecipient := addr
+
+	if referenceID == "" {
+		// no referenceID means this is a direct transfer
+		hash, err = wallet.Transfer(util.EnsureCorrectPrefix(addr.String()), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
+	} else {
+		// this is a spend which means it has to be linked to an order
+		// specified using the referenceID
+
+		isScript := false
+
+		if !isScript {
+			if !wallet.balanceCheck(feeLevel, amount) {
+				return nil, wi.ErrInsufficientFunds
+			}
+			hash, err = wallet.Transfer(util.EnsureCorrectPrefix(addr.String()), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		// txn is pending
+		nonce, err := wallet.client.GetTxnNonce(util.EnsureCorrectPrefix(hash.String()))
+		if err == nil {
+			data, err := SerializePendingTxn(PendingTxn{
+				TxnID:     hash,
+				Amount:    amount.String(),
+				OrderID:   referenceID,
+				Nonce:     nonce,
+				From:      wallet.address.EncodeAddress(),
+				To:        actualRecipient.EncodeAddress(),
+				WithInput: false,
+			})
+			if err == nil {
+				err0 := wallet.db.Txns().Put(data, ut.NormalizeAddress(hash.String()), "0", 0, time.Now(), true)
+				if err0 != nil {
+					log.Error(err0.Error())
+				}
+			}
+		}
+	}
+
+	if err == nil {
+		h, err = util.CreateChainHash(hash.String())
+		if err == nil {
+			wallet.invokeTxnCB(h.String(), &amount)
+		}
+	}
+	return h, err
+}
+
+func (wallet *ConfluxWallet) invokeTxnCB(txnID string, value *big.Int) {
+	txncb := wi.TransactionCallback{
+		Txid:      util.EnsureCorrectPrefix(txnID),
+		Outputs:   []wi.TransactionOutput{},
+		Inputs:    []wi.TransactionInput{},
+		Height:    0,
+		Timestamp: time.Now(),
+		Value:     *value,
+		WatchOnly: false,
+	}
+	for _, l := range wallet.listeners {
+		go l(txncb)
+	}
+}
+
+// GenerateMultisigScript - Generate a multisig script from public keys. If a timeout is included the returned script should be a timelocked escrow which releases using the timeoutKey.
+func (wallet *ConfluxWallet) GenerateMultisigScript(keys []hd.ExtendedKey, threshold int, timeout time.Duration, timeoutKey *hd.ExtendedKey) (btcutil.Address, []byte, error) {
+	return nil, []byte{}, nil
+}
+
 // CreateMultisigSignature - Create a signature for a multisig transaction
 func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, outs []wi.TransactionOutput, key *hd.ExtendedKey, redeemScript []byte, feePerByte big.Int) ([]wi.Signature, error) {
 
@@ -694,6 +877,86 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 	return nil, nil
 }
 
+func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress btcutil.Address, value big.Int, bTime time.Time, withInput bool) wi.TransactionCallback {
+	output := wi.TransactionOutput{
+		Address: toAddress,
+		Value:   value,
+		Index:   1,
+		OrderID: orderID,
+	}
+
+	input := wi.TransactionInput{}
+
+	if withInput {
+		input = wi.TransactionInput{
+			OutpointHash:  []byte(util.EnsureCorrectPrefix(txID)),
+			OutpointIndex: 1,
+			LinkedAddress: toAddress,
+			Value:         value,
+			OrderID:       orderID,
+		}
+
+	}
+
+	return wi.TransactionCallback{
+		Txid:      util.EnsureCorrectPrefix(txID),
+		Outputs:   []wi.TransactionOutput{output},
+		Inputs:    []wi.TransactionInput{input},
+		Height:    1,
+		Timestamp: time.Now(),
+		Value:     value,
+		WatchOnly: false,
+		BlockTime: bTime,
+	}
+}
+
+func (wallet *ConfluxWallet) AssociateTransactionWithOrder(txnCB wi.TransactionCallback) {
+	for _, l := range wallet.listeners {
+		go l(txnCB)
+	}
+}
+
+// checkTxnRcpt check the txn rcpt status
+func (wallet *ConfluxWallet) checkTxnRcpt(hash types.Hash, data []byte) (*types.Hash, error) {
+	pTxn, err := DeserializePendingTxn(data)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := wallet.client.GetTransactionByHash(hash)
+	if err != nil {
+		log.Infof("fetching txn rcpt: %v", err)
+	}
+
+	if tx != nil {
+		// good. so the txn has been processed but we have to account for failed
+		// but valid txn like some contract condition causing revert
+		if tx.Status != nil {
+			// all good to update order state
+			chash, err := util.CreateChainHash(hash.String())
+			if err != nil {
+				return nil, err
+			}
+			err = wallet.db.Txns().Delete(chash)
+			if err != nil {
+				log.Errorf("err deleting the pending txn : %v", err)
+			}
+			n := new(big.Int)
+			n, _ = n.SetString(pTxn.Amount, 10)
+			withInput := true
+			if pTxn.Amount != "0" {
+				withInput = pTxn.WithInput
+			}
+			toAddr, _ := wallet.DecodeAddress(pTxn.To)
+			go wallet.AssociateTransactionWithOrder(
+				wallet.createTxnCallback(util.EnsureCorrectPrefix(hash.String()), pTxn.OrderID, toAddr,
+					*n, time.Now(), withInput))
+		}
+	}
+	return &hash, nil
+
+}
+
 // BumpFee - Bump the fee for the given transaction
 func (wallet *ConfluxWallet) BumpFee(txid chainhash.Hash) (*chainhash.Hash, error) {
 	return util.CreateChainHash(txid.String())
@@ -718,6 +981,57 @@ func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.Tr
 		sum.Add(sum, gas.ToInt())
 	}
 	return *sum
+}
+
+// GetFeePerByte - Get the current fee per byte
+func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
+	est, err := wallet.client.GetCfxGasStationEstimate()
+	ret := big.NewInt(0)
+	if err != nil {
+		log.Errorf("err fetching ethgas station data: %v", err)
+		return *ret
+	}
+	switch feeLevel {
+	case wi.NORMAL:
+		ret, _ = big.NewFloat(est.Average * 100000000).Int(nil)
+	case wi.ECONOMIC, wi.SUPER_ECONOMIC:
+		ret, _ = big.NewFloat(est.SafeLow * 100000000).Int(nil)
+	case wi.PRIORITY, wi.FEE_BUMP:
+		ret, _ = big.NewFloat(est.Fast * 100000000).Int(nil)
+	}
+	return *ret
+}
+
+func (wallet *ConfluxWallet) balanceCheck(feeLevel wi.FeeLevel, amount big.Int) bool {
+	fee := wallet.GetFeePerByte(feeLevel)
+	if fee.Int64() == 0 {
+		return false
+	}
+	// lets check if the caller has enough balance to make the
+	// multisign call
+	requiredBalance := new(big.Int).Mul(&fee, big.NewInt(maxGasLimit))
+	requiredBalance = new(big.Int).Add(requiredBalance, &amount)
+	currentBalance, err := wallet.GetBalance()
+	if err != nil {
+		log.Error("err fetching eth wallet balance")
+		currentBalance = big.NewInt(0)
+	}
+	if requiredBalance.Cmp(currentBalance) > 0 {
+		// the wallet does not have the required balance
+		return false
+	}
+	return true
+}
+
+// EstimateSpendFee - Build a spend transaction for the amount and return the transaction fee
+func (wallet *ConfluxWallet) EstimateSpendFee(amount big.Int, feeLevel wi.FeeLevel) (big.Int, error) {
+	// if !wallet.balanceCheck(feeLevel, amount) {
+	// 	return *big.NewInt(0), wi.ErrInsufficientFunds
+	// }
+	// gas, err := wallet.client.EstimateGasSpend(wallet.account.Address(), &amount)
+	// return *gas, err
+	var gas big.Int
+	return gas, nil
 }
 
 // // Transfer will transfer the amount from this wallet to the spec address
