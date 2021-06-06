@@ -1034,11 +1034,33 @@ func (wallet *ConfluxWallet) EstimateSpendFee(amount big.Int, feeLevel wi.FeeLev
 	return gas, nil
 }
 
-// // Transfer will transfer the amount from this wallet to the spec address
-// func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, fee big.Int) (common.Hash, error) {
-// 	toAddress := common.HexToAddress(to)
-// 	return wallet.client.Transfer(wallet.account, toAddress, value, spendAll, fee)
-// }
+// SweepAddress - Build and broadcast a transaction that sweeps all coins from an address. If it is a p2sh multisig, the redeemScript must be included
+func (wallet *ConfluxWallet) SweepAddress(utxos []wi.TransactionInput, address *btcutil.Address, key *hd.ExtendedKey, redeemScript *[]byte, feeLevel wi.FeeLevel) (*chainhash.Hash, error) {
+
+	outs := []wi.TransactionOutput{}
+	for i, in := range utxos {
+		out := wi.TransactionOutput{
+			Address: wallet.address,
+			Value:   in.Value,
+			Index:   uint32(i),
+			OrderID: in.OrderID,
+		}
+		outs = append(outs, out)
+	}
+
+	sigs, err := wallet.CreateMultisigSignature([]wi.TransactionInput{}, outs, key, *redeemScript, *big.NewInt(1))
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := wallet.Multisign([]wi.TransactionInput{}, outs, sigs, []wi.Signature{}, *redeemScript, *big.NewInt(1), false)
+	if err != nil {
+		return nil, err
+	}
+	hash := common.BytesToHash(data)
+
+	return util.CreateChainHash(hash.Hex())
+}
 
 // GenDefaultKeyStore will generate a default keystore
 // func GenDefaultKeyStore(passwd string) (*Account, error) {
