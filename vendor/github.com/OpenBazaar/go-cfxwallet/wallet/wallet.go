@@ -147,7 +147,6 @@ func GenScriptHash(script CfxRedeemScript) ([32]byte, string, error) {
 type ConfluxWallet struct {
 	cfg     mwConfig.CoinConfig
 	client  *CfxClient
-	account *Account
 	am      *sdk.AccountManager
 	address *CfxAddress
 
@@ -192,11 +191,9 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 	}
 	log.Infof("The address is: %v", address.String())
 
-	account, _ := NewAccountFromMnemonic(mnemonic, "")
-
 	er := NewConfluxPriceFetcher(proxy)
 
-	return &ConfluxWallet{cfg, client, account, nil, &CfxAddress{address}, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
+	return &ConfluxWallet{cfg, client, nil, &CfxAddress{address}, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
 }
 
 // Start will start the wallet daemon
@@ -861,7 +858,8 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 	log.Debugf("phash          : %s", hexutil.Encode(payloadHash[:]))
 	copy(txHash[:], txnHash)
 
-	sig, err := crypto.Sign(txHash[:], wallet.account.privateKey)
+	privateKey := wallet.getPrivateKey()
+	sig, err := crypto.Sign(txHash[:], privateKey)
 	if err != nil {
 		log.Errorf("error signing in createmultisig : %v", err)
 	}
