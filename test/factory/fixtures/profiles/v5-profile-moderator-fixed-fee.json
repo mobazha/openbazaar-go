@@ -18,7 +18,8 @@
             "ZEC",
             "LTC",
             "BTC",
-            "BCH"
+            "BCH",
+            "CFX"
         ],
         "fee": {
             "fixedFee": {
@@ -61,7 +62,8 @@
         "ZEC",
         "LTC",
         "BTC",
-        "BCH"
+        "BCH",
+        "CFX"
     ],
     "version": 5
 }

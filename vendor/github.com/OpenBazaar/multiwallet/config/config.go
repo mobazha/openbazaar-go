@@ -235,5 +235,30 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 		}
 		cfg.Coins = append(cfg.Coins, ethCfg)
 	}
+	if coinTypes[wallet.Conflux] {
+		var apiEndpoints []string
+		if !testnet {
+			apiEndpoints = []string{
+				"https://main.confluxrpc.com",
+			}
+		} else {
+			apiEndpoints = []string{
+				"https://test.confluxrpc.com",
+			}
+		}
+		db, _ := mockDB.GetDatastoreForWallet(wallet.Conflux)
+		cfxCfg := CoinConfig{
+			CoinType:    wallet.Conflux,
+			FeeAPI:      "",
+			SuperLowFee: 70,
+			LowFee:      140,
+			MediumFee:   160,
+			HighFee:     180,
+			MaxFee:      2000,
+			ClientAPIs:  apiEndpoints,
+			DB:          db,
+		}
+		cfg.Coins = append(cfg.Coins, cfxCfg)
+	}
 	return cfg
 }

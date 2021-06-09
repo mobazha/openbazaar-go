@@ -5,7 +5,7 @@
 		"contractType": "DIGITAL_GOOD",
 		"format": "FIXED_PRICE",
 		"expiry": "2030-08-17T04:52:19.000Z",
-		"acceptedCurrencies": ["TBTC", "TBCH", "TLTC", "TZEC"]
+		"acceptedCurrencies": ["TBTC", "TBCH", "TLTC", "TZEC", "TCFX"]
 	},
 	"item": {
 		"title": "Citizenfour",
