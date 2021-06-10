@@ -140,7 +140,7 @@ func DefaultWalletsConfig() *WalletsConfig {
 			MediumFeeDefault: 15,
 			HighFeeDefault:   30,
 			MaxFee:           200,
-			WalletOptions:    nil,
+			WalletOptions:    ConfluxDefaultOptions(),
 		},
 	}
 }

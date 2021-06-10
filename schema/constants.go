@@ -47,6 +47,9 @@ const (
 	EthereumRegistryAddressRinkeby = "0x5cEF053c7b383f430FC4F4e1ea2F7D31d8e2D16C"
 	EthereumRegistryAddressRopsten = "0x403d907982474cdd51687b09a8968346159378f3"
 
+	ConfluxRegistryAddressMainnet = "0x5c69ccf91eab4ef80d9929b3c1b4d5bc03eb0981"
+	ConfluxRegistryAddressTestnet = "0x5cEF053c7b383f430FC4F4e1ea2F7D31d8e2D16C"
+
 	DataPushNodeOne   = "QmbwN82MVyBukT7WTdaQDppaACo62oUfma8dUa5R9nBFHm"
 	DataPushNodeTwo   = "QmPPg2qeF3n2KvTRXRZLaTwHCw8JxzF4uZK93RfMoDvf2o"
 	DataPushNodeThree = "QmY8puEnVx66uEet64gAf4VZRo7oUyMCwG6KdB9KM92EGQ"
@@ -92,6 +95,13 @@ func EthereumDefaultOptions() map[string]interface{} {
 		"RegistryAddress":        EthereumRegistryAddressMainnet,
 		"RinkebyRegistryAddress": EthereumRegistryAddressRinkeby,
 		"RopstenRegistryAddress": EthereumRegistryAddressRopsten,
+	}
+}
+
+func ConfluxDefaultOptions() map[string]interface{} {
+	return map[string]interface{}{
+		"RegistryAddress":        ConfluxRegistryAddressMainnet,
+		"TestnetRegistryAddress": ConfluxRegistryAddressTestnet,
 	}
 }
 

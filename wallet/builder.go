@@ -315,6 +315,7 @@ func prepareAPICoinConfig(coin wallet.CoinType, override *schema.CoinConfig, wal
 		defaultCoinOptions = schema.EthereumDefaultOptions()
 	case wallet.Conflux:
 		defaultConfig = defaultConfigSet.CFX
+		defaultCoinOptions = schema.ConfluxDefaultOptions()
 	}
 
 	if testnet {
