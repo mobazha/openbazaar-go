@@ -164,17 +164,18 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 		networkID = 1
 	}
 
-	privateKey, err := GetPrivateKey(mnemonic, "")
-	if err != nil {
-		log.Errorf("get private key from mnemonic failed: %s", err.Error())
-		return nil, err
-	}
-
 	keyStorePath := path.Join(repoPath, "keystore")
 	am := sdk.NewAccountManager(keyStorePath, networkID)
-	_, err = am.GetDefault()
+	_, err := am.GetDefault()
 	if err != nil {
 		log.Errorf("No account found: %s", err.Error())
+
+		privateKey, err := GetPrivateKey(mnemonic, "")
+		if err != nil {
+			log.Errorf("get private key from mnemonic failed: %s", err.Error())
+			return nil, err
+		}
+
 		_, err = am.ImportKey(privateKey, "")
 		if err != nil {
 			log.Errorf("import key failed: %s", err.Error())
