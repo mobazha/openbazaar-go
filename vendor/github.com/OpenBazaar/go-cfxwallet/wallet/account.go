@@ -3,6 +3,8 @@ package wallet
 import (
 	"github.com/Conflux-Chain/go-conflux-sdk/types/cfxaddress"
 	"github.com/btcsuite/btcd/chaincfg"
+	hdwallet "github.com/miguelmota/go-ethereum-hdwallet"
+	"github.com/tyler-smith/go-bip39"
 )
 
 // CfxAddress implements the WalletAddress interface
@@ -35,4 +37,22 @@ func (addr CfxAddress) ScriptAddress() []byte {
 // IsForNet returns true because CfxAddress has to become btc.Address
 func (addr CfxAddress) IsForNet(params *chaincfg.Params) bool {
 	return true
+}
+
+func GetPrivateKey(mnemonic string, password string) (string, error) {
+	seed := bip39.NewSeed(mnemonic, "") //这里可以选择传入指定密码或者空字符串，不同密码生成的助记词不同
+
+	wallet, err := hdwallet.NewFromSeed(seed)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// path := hdwallet.MustParseDerivationPath("m/44'/503'/0'/0/0") //最后一位是同一个助记词的地址id，从0开始，相同助记词可以生产无限个地址
+	// account, err := wallet.Derive(path, false)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	log.Info(wallet)
+
+	return "", nil
 }

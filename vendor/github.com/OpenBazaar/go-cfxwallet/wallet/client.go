@@ -27,7 +27,7 @@ func NewCfxClient(url string, option ...cfxSDK.ClientOption) (*CfxClient, error)
 	var conn *cfxSDK.Client
 
 	var err error
-	if conn, err = cfxSDK.NewClient(url); err != nil {
+	if conn, err = cfxSDK.NewClient(url, option...); err != nil {
 		return nil, err
 	}
 

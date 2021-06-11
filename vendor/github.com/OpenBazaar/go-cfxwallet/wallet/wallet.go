@@ -159,25 +159,28 @@ type ConfluxWallet struct {
 func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string, proxy proxy.Dialer) (*ConfluxWallet, error) {
 	url := "https://test.confluxrpc.com"
 
-	// var networkID uint32 = 1029
-	// if cfg.CoinType == wi.TestnetConflux {
-	// 	networkID = 1
-	// }
+	var networkID uint32 = 1029
+	if cfg.CoinType == wi.TestnetConflux {
+		networkID = 1
+	}
 
-	// privateKey, err := getPrivateKey(mnemonic)
-	// if err != nil {
-	// 	log.Errorf("get private key from mnemonic failed: %s", err.Error())
-	// 	return nil, err
-	// }
+	privateKey, err := GetPrivateKey(mnemonic, "")
+	if err != nil {
+		log.Errorf("get private key from mnemonic failed: %s", err.Error())
+		return nil, err
+	}
 
 	keyStorePath := path.Join(repoPath, "keystore")
-	// am := sdk.NewAccountManager(keyStorePath, networkID)
-	// address, err := am.ImportKey(privateKey, "")
-	// if err != nil {
-	// 	log.Errorf("import key failed: %s", err.Error())
-	// 	return nil, err
-	// }
-	// log.Infof("The address is: %v", address.String())
+	am := sdk.NewAccountManager(keyStorePath, networkID)
+	_, err = am.GetDefault()
+	if err != nil {
+		log.Errorf("No account found: %s", err.Error())
+		_, err = am.ImportKey(privateKey, "")
+		if err != nil {
+			log.Errorf("import key failed: %s", err.Error())
+			return nil, err
+		}
+	}
 
 	client, err := NewCfxClient(url, sdk.ClientOption{KeystorePath: keyStorePath})
 	if err != nil {
