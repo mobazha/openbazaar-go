@@ -47,12 +47,11 @@ func GetPrivateKey(mnemonic string, password string) (string, error) {
 		log.Fatal(err)
 	}
 
-	// path := hdwallet.MustParseDerivationPath("m/44'/503'/0'/0/0") //最后一位是同一个助记词的地址id，从0开始，相同助记词可以生产无限个地址
-	// account, err := wallet.Derive(path, false)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	log.Info(wallet)
+	path := hdwallet.MustParseDerivationPath("m/44'/503'/0'/0/0") //最后一位是同一个助记词的地址id，从0开始，相同助记词可以生产无限个地址
+	account, err := wallet.Derive(path, false)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	return "", nil
+	return wallet.PrivateKeyHex(account)
 }
