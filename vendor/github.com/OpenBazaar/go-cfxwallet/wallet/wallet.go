@@ -535,8 +535,6 @@ func (wallet *ConfluxWallet) ChainTip() (uint32, chainhash.Hash) {
 	status, err := wallet.client.GetStatus()
 	if err != nil {
 		fmt.Printf("- get status error: %v\n\n", err.Error())
-	} else {
-		fmt.Printf("- get status result:\n%+v\n\n", status)
 	}
 
 	h, err := util.CreateChainHash(status.BestHash.String())

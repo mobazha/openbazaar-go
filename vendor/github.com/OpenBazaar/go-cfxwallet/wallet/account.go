@@ -20,7 +20,7 @@ func NewCfxAddress(base32OrHex string, networkID ...uint32) (*CfxAddress, error)
 
 // String representation of cfx address
 func (addr CfxAddress) String() string {
-	return addr.String()
+	return addr.address.String()
 }
 
 // EncodeAddress returns representation of the address
