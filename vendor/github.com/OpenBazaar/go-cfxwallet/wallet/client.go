@@ -16,7 +16,8 @@ import (
 // CfxClient represents the cfx client
 type CfxClient struct {
 	*cfxSDK.Client
-	url string
+	scaner *ConfluxScan
+	url    string
 }
 
 var txns []wi.Txn
@@ -31,11 +32,13 @@ func NewCfxClient(url string, option ...cfxSDK.ClientOption) (*CfxClient, error)
 		return nil, err
 	}
 
+	scaner := NewConfluxScan()
+
 	return &CfxClient{
 		Client: conn,
+		scaner: scaner,
 		url:    url,
 	}, nil
-
 }
 
 // Transfer will transfer cfx from this user account to dest address
@@ -44,7 +47,6 @@ func (client *CfxClient) Transfer(from cfxaddress.Address, to cfxaddress.Address
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("creat a new unsigned transaction %+v\n\n", utx)
 
 	err = client.ApplyUnsignedTransactionDefault(&utx)
 	if err != nil {
@@ -71,8 +73,6 @@ func (client *CfxClient) Transfer(from cfxaddress.Address, to cfxaddress.Address
 	if err != nil {
 		return "", fmt.Errorf("failed to send transaction, raw data = 0x%+x, error: %v", rawData, err)
 	}
-
-	fmt.Printf("send transaction hash: %v\n\n", txhash)
 
 	txns = append(txns, wi.Txn{
 		Txid:      txhash.String(),

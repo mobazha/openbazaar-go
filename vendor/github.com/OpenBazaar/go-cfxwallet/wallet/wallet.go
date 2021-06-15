@@ -426,65 +426,47 @@ func (wallet *ConfluxWallet) Balance() (confirmed, unconfirmed wi.CurrencyValue)
 func (wallet *ConfluxWallet) TransactionsFromEpoch(startBlock *int) ([]wi.Txn, error) {
 	ret := []wi.Txn{}
 
-	// unconf, _ := wallet.db.Txns().GetAll(false)
+	unconf, _ := wallet.db.Txns().GetAll(false)
 
-	// txns, err := wallet.client.eClient.NormalTxByAddress(util.EnsureCorrectPrefix(wallet.account.Address().String()), startBlock, nil,
-	// 	1, 0, false)
-	// if err != nil && len(unconf) == 0 {
-	// 	log.Error("err fetching transactions : ", err)
-	// 	return []wi.Txn{}, nil
-	// }
+	txns, err := wallet.client.scaner.getTxRecords(wallet.address.String(), 0, 50)
+	if err != nil && len(unconf) == 0 {
+		log.Error("err fetching transactions : ", err)
+		return []wi.Txn{}, nil
+	}
 
-	// for _, t := range txns {
-	// 	status := wi.StatusConfirmed
-	// 	if t.Confirmations > 1 && t.Confirmations <= 7 {
-	// 		status = wi.StatusPending
-	// 	}
-	// 	prefix := ""
-	// 	if t.IsError != 0 {
-	// 		status = wi.StatusError
-	// 	}
-	// 	if strings.ToLower(t.From) == strings.ToLower(wallet.address.String()) {
-	// 		prefix = "-"
-	// 	}
+	currentTip, _ := wallet.ChainTip()
+	for i := len(txns) - 1; i >= 0; i-- {
+		t := txns[i]
+		status := wi.StatusConfirmed
+		prefix := ""
+		if t.Status == 1 {
+			status = wi.StatusError
+		}
+		if strings.ToLower(t.From) == strings.ToLower(wallet.address.String()) {
+			prefix = "-"
+		}
 
-	// 	val := t.Value.Int().String()
+		val := t.Value
 
-	// 	if val == "0" { // Internal Transaction
-	// 		internalTxns, err := wallet.client.eClient.InternalTxByAddress(t.To, &t.BlockNumber, &t.BlockNumber, 1, 0, false)
-	// 		if err != nil && len(unconf) == 0 {
-	// 			log.Errorf("Transaction Errored: %v\n", err)
-	// 			continue
-	// 		}
-	// 		intVal, _ := new(big.Int).SetString("0", 10)
-	// 		for _, v := range internalTxns {
-	// 			fmt.Println(v.From, v.To, v.Value)
-	// 			if v.To == t.From {
-	// 				intVal = new(big.Int).Add(intVal, v.Value.Int())
-	// 			}
-	// 		}
-	// 		val = intVal.String()
-	// 	} else {
-	// 		val = prefix + val
-	// 	}
+		val = prefix + val
 
-	// 	tnew := wi.Txn{
-	// 		Txid:          util.EnsureCorrectPrefix(t.Hash),
-	// 		Value:         val,
-	// 		Height:        int32(t.BlockNumber),
-	// 		Timestamp:     t.TimeStamp.Time(),
-	// 		WatchOnly:     false,
-	// 		Confirmations: int64(t.Confirmations),
-	// 		Status:        wi.StatusCode(status),
-	// 		Bytes:         []byte(t.Input),
-	// 	}
-	// 	ret = append(ret, tnew)
-	// }
+		tnew := wi.Txn{
+			Txid:          util.EnsureCorrectPrefix(t.Hash),
+			Value:         val,
+			Height:        int32(t.EpochNumber),
+			Timestamp:     time.Unix(t.Timestamp, 0),
+			WatchOnly:     false,
+			Confirmations: int64(currentTip - t.EpochNumber),
+			Status:        wi.StatusCode(status),
+			Bytes:         []byte{},
+		}
+		ret = append(ret, tnew)
+	}
 
-	// for _, u := range unconf {
-	// 	u.Status = wi.StatusUnconfirmed
-	// 	ret = append(ret, u)
-	// }
+	for _, u := range unconf {
+		u.Status = wi.StatusUnconfirmed
+		ret = append(ret, u)
+	}
 
 	return ret, nil
 }
