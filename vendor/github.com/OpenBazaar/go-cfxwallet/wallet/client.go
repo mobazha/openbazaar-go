@@ -56,6 +56,11 @@ func (client *CfxClient) Transfer(from cfxaddress.Address, to cfxaddress.Address
 		return "", errors.New("account manager not specified, see SetAccountManager")
 	}
 
+	err = client.AccountManager.TimedUnlockDefault("", 30*time.Second)
+	if err != nil {
+		return "", errors.New("account manager failed to unlock default address")
+	}
+
 	rawData, err := client.AccountManager.SignTransaction(utx)
 	if err != nil {
 		return "", err

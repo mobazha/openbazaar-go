@@ -496,7 +496,7 @@ func (wallet *ConfluxWallet) Transactions() ([]wi.Txn, error) {
 
 // GetTransaction - Get info on a specific transaction
 func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error) {
-	tx, err := wallet.client.GetTransactionByHash(types.Hash(txid.String()))
+	tx, err := wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
 	if err != nil {
 		return wi.Txn{}, err
 	}
@@ -552,7 +552,7 @@ func (wallet *ConfluxWallet) ReSyncBlockchain(fromTime time.Time) {
 
 // GetConfirmations - Return the number of confirmations and the height for a transaction
 func (wallet *ConfluxWallet) GetConfirmations(txid chainhash.Hash) (confirms, atHeight uint32, err error) {
-	tx, err := wallet.client.GetTransactionByHash(types.Hash(txid.String()))
+	tx, err := wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
 	if err != nil {
 		return 0, 0, err
 	}
@@ -647,7 +647,7 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 
 	if referenceID == "" {
 		// no referenceID means this is a direct transfer
-		hash, err = wallet.Transfer(util.EnsureCorrectPrefix(addr.String()), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
+		hash, err = wallet.Transfer(addr.String(), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
 	} else {
 		// this is a spend which means it has to be linked to an order
 		// specified using the referenceID
@@ -658,7 +658,7 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			if !wallet.balanceCheck(feeLevel, amount) {
 				return nil, wi.ErrInsufficientFunds
 			}
-			hash, err = wallet.Transfer(util.EnsureCorrectPrefix(addr.String()), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
+			hash, err = wallet.Transfer(addr.String(), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
 		}
 		if err != nil {
 			return nil, err
