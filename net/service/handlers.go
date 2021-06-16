@@ -2030,7 +2030,14 @@ func (service *OpenBazaarService) handleOrderPayment(peer peer.ID, pmes *pb.Mess
 
 	}
 
-	toAddress, err := wal.DecodeAddress(contract.BuyerOrder.Payment.RedeemScript)
+	var toAddress btcutil.Address
+	if contract.VendorOrderConfirmation != nil &&
+		contract.BuyerOrder.Payment.Method != pb.Order_Payment_MODERATED {
+		toAddress, err = wal.DecodeAddress(contract.VendorOrderConfirmation.PaymentAddress)
+	} else {
+		toAddress, err = wal.DecodeAddress(contract.BuyerOrder.Payment.RedeemScript)
+	}
+
 	if err != nil {
 		log.Error(err)
 	}
