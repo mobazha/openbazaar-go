@@ -220,7 +220,7 @@ func (wallet *ConfluxWallet) Start() {
 					continue
 				}
 				for _, txn := range txns {
-					hash := types.Hash(txn.Txid)
+					hash := types.Hash(util.EnsureCorrectPrefix(txn.Txid))
 					go func(txnData []byte) {
 						_, err := wallet.checkTxnRcpt(hash, txnData)
 						if err != nil {
@@ -620,7 +620,7 @@ func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, 
 	return wallet.client.Transfer(*wallet.address.address, toAddress, &val, spendAll, &feeVal)
 }
 
-// Spend - Send ether to an external wallet
+// Spend - Send conflux to an external wallet
 func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel, referenceID string, spendAll bool) (*chainhash.Hash, error) {
 	var hash types.Hash
 	var h *chainhash.Hash
@@ -931,7 +931,7 @@ func (wallet *ConfluxWallet) checkTxnRcpt(hash types.Hash, data []byte) (*types.
 			}
 			toAddr, _ := wallet.DecodeAddress(pTxn.To)
 			go wallet.AssociateTransactionWithOrder(
-				wallet.createTxnCallback(util.EnsureCorrectPrefix(hash.String()), pTxn.OrderID, toAddr,
+				wallet.createTxnCallback(hash.String(), pTxn.OrderID, toAddr,
 					*n, time.Now(), withInput))
 		}
 	}
@@ -995,7 +995,7 @@ func (wallet *ConfluxWallet) balanceCheck(feeLevel wi.FeeLevel, amount big.Int) 
 	requiredBalance = new(big.Int).Add(requiredBalance, &amount)
 	currentBalance, err := wallet.GetBalance()
 	if err != nil {
-		log.Error("err fetching eth wallet balance")
+		log.Error("err fetching cfx wallet balance")
 		currentBalance = big.NewInt(0)
 	}
 	if requiredBalance.Cmp(currentBalance) > 0 {
