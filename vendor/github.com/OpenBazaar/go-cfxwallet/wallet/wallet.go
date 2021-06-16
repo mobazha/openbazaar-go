@@ -622,21 +622,60 @@ func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, 
 
 // Spend - Send conflux to an external wallet
 func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel, referenceID string, spendAll bool) (*chainhash.Hash, error) {
-	var hash types.Hash
-	var h *chainhash.Hash
-	var err error
+	var (
+		hash      types.Hash
+		h         *chainhash.Hash
+		watchOnly bool
+		nonce     int32
+		err       error
+	)
 	actualRecipient := addr
 
 	if referenceID == "" {
 		// no referenceID means this is a direct transfer
 		hash, err = wallet.Transfer(addr.String(), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
 	} else {
+		watchOnly = true
 		// this is a spend which means it has to be linked to an order
 		// specified using the referenceID
 
+		// check if the addr is a multisig addr
+		scripts, err := wallet.db.WatchedScripts().GetAll()
+		if err != nil {
+			return nil, err
+		}
 		isScript := false
+		addrCfx := common.HexToAddress(addr.String())
+		key := addrCfx.Bytes()
+		redeemScript := []byte{}
 
-		if !isScript {
+		for _, script := range scripts {
+			if bytes.Equal(key, script[:common.AddressLength]) {
+				isScript = true
+				redeemScript = script[common.AddressLength:]
+				break
+			}
+		}
+
+		if isScript {
+			cfxScript, err := DeserializeCfxScript(redeemScript)
+			if err != nil {
+				return nil, err
+			}
+			_, scrHash, err := GenScriptHash(cfxScript)
+			if err != nil {
+				log.Error(err.Error())
+			}
+			addrScrHash := common.HexToAddress(scrHash)
+			log.Info(addrScrHash)
+			// actualRecipient = CfxAddress{address: &addrScrHash}
+			// hash, _, err = wallet.callAddTransaction(cfxScript, &amount, feeLevel)
+			// if err != nil {
+			// 	log.Errorf("error call add txn: %v", err)
+			// 	return nil, wi.ErrInsufficientFunds
+			// }
+			return nil, wi.ErrInsufficientFunds
+		} else {
 			if !wallet.balanceCheck(feeLevel, amount) {
 				return nil, wi.ErrInsufficientFunds
 			}
@@ -647,33 +686,33 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 		}
 
 		// txn is pending
-		nonce, err := wallet.client.GetTxnNonce(util.EnsureCorrectPrefix(hash.String()))
-		if err == nil {
-			data, err := SerializePendingTxn(PendingTxn{
-				TxnID:     hash,
-				Amount:    amount.String(),
-				OrderID:   referenceID,
-				Nonce:     nonce,
-				From:      wallet.address.EncodeAddress(),
-				To:        actualRecipient.EncodeAddress(),
-				WithInput: false,
-			})
-			if err == nil {
-				err0 := wallet.db.Txns().Put(data, ut.NormalizeAddress(hash.String()), "0", 0, time.Now(), true)
-				if err0 != nil {
-					log.Error(err0.Error())
-				}
-			}
+		nonce, err = wallet.client.GetTxnNonce(util.EnsureCorrectPrefix(hash.String()))
+		if err != nil {
+			return nil, err
 		}
 	}
-
 	if err == nil {
 		h, err = util.CreateChainHash(hash.String())
 		if err == nil {
 			wallet.invokeTxnCB(h.String(), &amount)
 		}
 	}
-	return h, err
+	data, err := SerializePendingTxn(PendingTxn{
+		TxnID:     hash,
+		Amount:    amount.String(),
+		OrderID:   referenceID,
+		Nonce:     nonce,
+		From:      wallet.address.EncodeAddress(),
+		To:        actualRecipient.EncodeAddress(),
+		WithInput: false,
+	})
+	if err == nil {
+		err0 := wallet.db.Txns().Put(data, ut.NormalizeAddress(hash.String()), amount.String(), 0, time.Now(), watchOnly)
+		if err0 != nil {
+			log.Error(err0.Error())
+		}
+	}
+	return h, nil
 }
 
 func (wallet *ConfluxWallet) invokeTxnCB(txnID string, value *big.Int) {
@@ -986,9 +1025,9 @@ func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
 
 func (wallet *ConfluxWallet) balanceCheck(feeLevel wi.FeeLevel, amount big.Int) bool {
 	fee := wallet.GetFeePerByte(feeLevel)
-	if fee.Int64() == 0 {
-		return false
-	}
+	// if fee.Int64() == 0 {
+	// 	return false
+	// }
 	// lets check if the caller has enough balance to make the
 	// multisign call
 	requiredBalance := new(big.Int).Mul(&fee, big.NewInt(maxGasLimit))
