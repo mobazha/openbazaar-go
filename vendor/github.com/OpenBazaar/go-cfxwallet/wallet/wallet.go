@@ -485,7 +485,7 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 
 	return wi.Txn{
 		Txid:        tx.Hash.String(),
-		Value:       tx.Value.String(),
+		Value:       tx.Value.ToInt().String(),
 		Height:      0,
 		Timestamp:   time.Now(),
 		WatchOnly:   false,
