@@ -23,6 +23,10 @@ func (addr CfxAddress) String() string {
 	return addr.address.String()
 }
 
+func (addr CfxAddress) VerboseString() string {
+	return addr.address.MustGetVerboseBase32Address()
+}
+
 // EncodeAddress returns representation of the address
 func (addr CfxAddress) EncodeAddress() string {
 	return addr.String()

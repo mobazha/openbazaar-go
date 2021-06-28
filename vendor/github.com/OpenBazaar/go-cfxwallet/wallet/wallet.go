@@ -442,7 +442,7 @@ func (wallet *ConfluxWallet) TransactionsFromEpoch(startBlock *int) ([]wi.Txn, e
 		if t.Status == 1 {
 			status = wi.StatusError
 		}
-		if strings.ToLower(t.From) == strings.ToLower(wallet.address.String()) {
+		if strings.ToLower(t.From) == strings.ToLower(wallet.address.VerboseString()) {
 			prefix = "-"
 		}
 
