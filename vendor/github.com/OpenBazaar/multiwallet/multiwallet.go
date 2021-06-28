@@ -110,8 +110,19 @@ func (w *MultiWallet) Start() {
 }
 
 func (w *MultiWallet) Close() {
-	for _, wallet := range *w {
-		wallet.Close()
+	for coinType, wallet := range *w {
+		c1 := make(chan string, 1)
+		go func() {
+			wallet.Close()
+			c1 <- coinType.String() + "wallet closed"
+		}()
+
+		select {
+		case res := <-c1:
+			log.Info(res)
+		case <-time.After(10 * time.Second):
+			log.Error("Close " + coinType.String() + "wallet out of time")
+		}
 	}
 }
 
