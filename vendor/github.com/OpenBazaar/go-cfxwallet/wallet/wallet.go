@@ -386,16 +386,12 @@ func (wallet *ConfluxWallet) ScriptToAddress(script []byte) (btcutil.Address, er
 
 // GetBalance returns the balance for the wallet
 func (wallet *ConfluxWallet) GetBalance() (*big.Int, error) {
-	defaultAccount, _ := wallet.client.AccountManager.GetDefault()
-	balance, err := wallet.client.GetBalance(*defaultAccount, types.EpochLatestConfirmed)
-	return balance.ToInt(), err
+	return wallet.client.getBalance()
 }
 
 // GetUnconfirmedBalance returns the unconfirmed balance for the wallet
 func (wallet *ConfluxWallet) GetUnconfirmedBalance() (*big.Int, error) {
-	defaultAccount, _ := wallet.client.AccountManager.GetDefault()
-	balance, err := wallet.client.GetBalance(*defaultAccount, types.EpochLatestState)
-	return balance.ToInt(), err
+	return wallet.client.getUnconfirmedBalance()
 }
 
 // Balance - Get the confirmed and unconfirmed balances
@@ -410,7 +406,7 @@ func (wallet *ConfluxWallet) Balance() (confirmed, unconfirmed wi.CurrencyValue)
 	}
 	ucbal, err := wallet.GetUnconfirmedBalance()
 	ucb := big.NewInt(0)
-	if err == nil {
+	if err == nil && ucbal != nil {
 		if ucbal.Cmp(bal) > 0 {
 			ucb.Sub(ucbal, bal)
 		}
@@ -420,6 +416,24 @@ func (wallet *ConfluxWallet) Balance() (confirmed, unconfirmed wi.CurrencyValue)
 		Currency: CfxCurrencyDefinition,
 	}
 	return balance, ucbalance
+}
+
+func (wallet *ConfluxWallet) equalsCfxAddress(addr1 string, addr2 string) bool {
+	if addr1 == addr2 {
+		return true
+	}
+
+	networkID, _ := wallet.client.GetNetworkID()
+	cfxAddress1, err := cfxaddress.New(addr1, networkID)
+	if err != nil {
+		return false
+	}
+	cfxAddress2, err := cfxaddress.New(addr2, networkID)
+	if err != nil {
+		return false
+	}
+
+	return cfxAddress1.Equals(&cfxAddress2)
 }
 
 // TransactionsFromEpoch - Returns a list of transactions for this wallet begining from the specified epoch
@@ -442,7 +456,8 @@ func (wallet *ConfluxWallet) TransactionsFromEpoch(startBlock *int) ([]wi.Txn, e
 		if t.Status == 1 {
 			status = wi.StatusError
 		}
-		if strings.ToLower(t.From) == strings.ToLower(wallet.address.VerboseString()) {
+
+		if wallet.equalsCfxAddress(t.From, wallet.address.String()) {
 			prefix = "-"
 		}
 
@@ -620,6 +635,23 @@ func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, 
 	return wallet.client.Transfer(*wallet.address.address, toAddress, &val, spendAll, &feeVal)
 }
 
+func (wallet *ConfluxWallet) getSpendGas(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel) big.Int {
+	networkID, _ := wallet.client.GetNetworkID()
+	from := wallet.address
+	to, err := cfxaddress.New(addr.String(), networkID)
+	if err != nil {
+		big.NewInt(0)
+	}
+
+	val := hexutil.Big(amount)
+	gas, err := wallet.client.EstimateTxnGas(*from.address, to, &val)
+	if err != nil || gas == nil {
+		big.NewInt(0)
+	}
+
+	return *gas.ToInt()
+}
+
 // Spend - Send conflux to an external wallet
 func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel, referenceID string, spendAll bool) (*chainhash.Hash, error) {
 	var (
@@ -632,6 +664,10 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 	actualRecipient := addr
 
 	if referenceID == "" {
+		if !wallet.client.balanceCheck(feeLevel, amount) {
+			return nil, wi.ErrInsufficientFunds
+		}
+
 		// no referenceID means this is a direct transfer
 		hash, err = wallet.Transfer(addr.String(), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
 	} else {
@@ -676,7 +712,7 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			// }
 			return nil, wi.ErrInsufficientFunds
 		} else {
-			if !wallet.balanceCheck(feeLevel, amount) {
+			if !wallet.client.balanceCheck(feeLevel, amount) {
 				return nil, wi.ErrInsufficientFunds
 			}
 			hash, err = wallet.Transfer(addr.String(), &amount, spendAll, wallet.GetFeePerByte(feeLevel))
@@ -1006,53 +1042,17 @@ func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.Tr
 
 // GetFeePerByte - Get the current fee per byte
 func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
-	est, err := wallet.client.GetCfxGasStationEstimate()
-	ret := big.NewInt(0)
-	if err != nil {
-		log.Errorf("err fetching ethgas station data: %v", err)
-		return *ret
-	}
-	switch feeLevel {
-	case wi.NORMAL:
-		ret, _ = big.NewFloat(est.Average * 100000000).Int(nil)
-	case wi.ECONOMIC, wi.SUPER_ECONOMIC:
-		ret, _ = big.NewFloat(est.SafeLow * 100000000).Int(nil)
-	case wi.PRIORITY, wi.FEE_BUMP:
-		ret, _ = big.NewFloat(est.Fast * 100000000).Int(nil)
-	}
-	return *ret
-}
-
-func (wallet *ConfluxWallet) balanceCheck(feeLevel wi.FeeLevel, amount big.Int) bool {
-	fee := wallet.GetFeePerByte(feeLevel)
-	// if fee.Int64() == 0 {
-	// 	return false
-	// }
-	// lets check if the caller has enough balance to make the
-	// multisign call
-	requiredBalance := new(big.Int).Mul(&fee, big.NewInt(maxGasLimit))
-	requiredBalance = new(big.Int).Add(requiredBalance, &amount)
-	currentBalance, err := wallet.GetBalance()
-	if err != nil {
-		log.Error("err fetching cfx wallet balance")
-		currentBalance = big.NewInt(0)
-	}
-	if requiredBalance.Cmp(currentBalance) > 0 {
-		// the wallet does not have the required balance
-		return false
-	}
-	return true
+	return wallet.client.GetFeePerByte(feeLevel)
 }
 
 // EstimateSpendFee - Build a spend transaction for the amount and return the transaction fee
 func (wallet *ConfluxWallet) EstimateSpendFee(amount big.Int, feeLevel wi.FeeLevel) (big.Int, error) {
-	// if !wallet.balanceCheck(feeLevel, amount) {
-	// 	return *big.NewInt(0), wi.ErrInsufficientFunds
-	// }
-	// gas, err := wallet.client.EstimateGasSpend(wallet.account.Address(), &amount)
-	// return *gas, err
-	var gas big.Int
-	return gas, nil
+	if !wallet.client.balanceCheck(feeLevel, amount) {
+		return *big.NewInt(0), wi.ErrInsufficientFunds
+	}
+
+	val := hexutil.Big(amount)
+	return wallet.client.EstimateGasSpend(*wallet.address.address, &val)
 }
 
 // SweepAddress - Build and broadcast a transaction that sweeps all coins from an address. If it is a p2sh multisig, the redeemScript must be included
