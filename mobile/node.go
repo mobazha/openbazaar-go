@@ -284,7 +284,7 @@ func NewNodeWithConfig(config *NodeConfig, password string, mnemonic string) (*N
 		Datastore:                     sqliteDB,
 		MasterPrivateKey:              mPrivKey,
 		Multiwallet:                   mw,
-		OfflineMessageFailoverTimeout: 3 * time.Second,
+		OfflineMessageFailoverTimeout: 30 * time.Second,
 		PushNodes:                     pushNodes,
 		RepoPath:                      config.RepoPath,
 		UserAgent:                     core.USERAGENT,

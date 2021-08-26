@@ -32,7 +32,7 @@ import (
 
 const (
 	// VERSION - current version
-	VERSION = "0.1.0"
+	VERSION = "0.14.7"
 	// USERAGENT - user-agent header string
 	USERAGENT = "/mobazha-go:" + VERSION + "/"
 )

@@ -242,6 +242,9 @@ func (wallet *ConfluxWallet) Start() {
 			log.Infof("err fetching initial balance: %v", err)
 		}
 		currentTip, _ := wallet.ChainTip()
+		if currentTip == 0 {
+			log.Fatal("Failed to get chain tip when init")
+		}
 
 		for {
 			select {
@@ -258,6 +261,10 @@ func (wallet *ConfluxWallet) Start() {
 					// process balance change
 					go wallet.processBalanceChange(currentBalance, fetchedBalance, currentTip)
 					currentTip, _ = wallet.ChainTip()
+					if currentTip == 0 {
+						log.Warning("Failed to get chain tip")
+						continue
+					}
 					currentBalance = fetchedBalance
 				}
 			}
@@ -449,6 +456,10 @@ func (wallet *ConfluxWallet) TransactionsFromEpoch(startBlock *int) ([]wi.Txn, e
 	}
 
 	currentTip, _ := wallet.ChainTip()
+	if currentTip == 0 {
+		log.Error("err failed to get ChainTip")
+		return []wi.Txn{}, nil
+	}
 	for i := len(txns) - 1; i >= 0; i-- {
 		t := txns[i]
 		status := wi.StatusConfirmed
@@ -498,6 +509,10 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		return wi.Txn{}, err
 	}
 
+	if tx == nil {
+		return wi.Txn{}, errors.New("tx is nil!!!, txid: " + txid.String())
+	}
+
 	return wi.Txn{
 		Txid:        tx.Hash.String(),
 		Value:       tx.Value.ToInt().String(),
@@ -532,12 +547,13 @@ func (wallet *ConfluxWallet) ChainTip() (uint32, chainhash.Hash) {
 	status, err := wallet.client.GetStatus()
 	if err != nil {
 		fmt.Printf("- get status error: %v\n\n", err.Error())
+		return 0, *emptyChainHash
 	}
 
 	h, err := util.CreateChainHash(status.BestHash.String())
 	if err != nil {
 		log.Error(err.Error())
-		h = emptyChainHash
+		return 0, *emptyChainHash
 	}
 	return uint32(status.EpochNumber), *h
 }
