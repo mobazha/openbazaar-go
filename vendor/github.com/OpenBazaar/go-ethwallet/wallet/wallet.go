@@ -545,7 +545,7 @@ func (wallet *EthereumWallet) TransactionsFromBlock(startBlock *int) ([]wi.Txn, 
 
 		val := t.Value.Int().String()
 
-		if val == "0" {	// Internal Transaction
+		if val == "0" { // Internal Transaction
 			internalTxns, err := wallet.client.eClient.InternalTxByAddress(t.To, &t.BlockNumber, &t.BlockNumber, 1, 0, false)
 			if err != nil && len(unconf) == 0 {
 				log.Errorf("Transaction Errored: %v\n", err)
@@ -601,7 +601,7 @@ func (wallet *EthereumWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error
 		return wi.Txn{}, err
 	}
 
-	msg, err := tx.AsMessage(types.NewEIP155Signer(chainID)) // HomesteadSigner{})
+	msg, err := tx.AsMessage(types.NewEIP155Signer(chainID), nil) // HomesteadSigner{})
 	if err != nil {
 		return wi.Txn{}, err
 	}
@@ -686,11 +686,11 @@ func (wallet *EthereumWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
 // Spend - Send ether to an external wallet
 func (wallet *EthereumWallet) Spend(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel, referenceID string, spendAll bool) (*chainhash.Hash, error) {
 	var (
-		hash common.Hash
-		h *chainhash.Hash
+		hash      common.Hash
+		h         *chainhash.Hash
 		watchOnly bool
-		nonce int32
-		err error
+		nonce     int32
+		err       error
 	)
 	actualRecipient := addr
 
