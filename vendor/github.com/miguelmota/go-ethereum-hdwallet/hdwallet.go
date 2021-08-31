@@ -245,18 +245,18 @@ func (w *Wallet) SignTxEIP155(account accounts.Account, tx *types.Transaction, c
 		return nil, err
 	}
 
+	signer := types.NewEIP155Signer(chainID)
 	// Sign the transaction and verify the sender to avoid hardware fault surprises
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), privateKey)
+	signedTx, err := types.SignTx(tx, signer, privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	msg, err := signedTx.AsMessage(types.NewEIP155Signer(chainID))
+	sender, err := types.Sender(signer, signedTx)
 	if err != nil {
 		return nil, err
 	}
 
-	sender := msg.From()
 	if sender != account.Address {
 		return nil, fmt.Errorf("signer mismatch: expected %s, got %s", account.Address.Hex(), sender.Hex())
 	}
@@ -280,18 +280,18 @@ func (w *Wallet) SignTx(account accounts.Account, tx *types.Transaction, chainID
 		return nil, err
 	}
 
+	signer := types.HomesteadSigner{}
 	// Sign the transaction and verify the sender to avoid hardware fault surprises
-	signedTx, err := types.SignTx(tx, types.HomesteadSigner{}, privateKey)
+	signedTx, err := types.SignTx(tx, signer, privateKey)
 	if err != nil {
 		return nil, err
 	}
 
-	msg, err := signedTx.AsMessage(types.HomesteadSigner{})
+	sender, err := types.Sender(signer, signedTx)
 	if err != nil {
 		return nil, err
 	}
 
-	sender := msg.From()
 	if sender != account.Address {
 		return nil, fmt.Errorf("signer mismatch: expected %s, got %s", account.Address.Hex(), sender.Hex())
 	}
