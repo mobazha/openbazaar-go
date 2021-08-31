@@ -87,46 +87,54 @@ func bindToken(address common.Address, caller bind.ContractCaller, transactor bi
 //
 // Solidity: function balanceOf(_owner address) constant returns(balance uint256)
 func (_Token *tokenCaller) BalanceOf(opts *bind.CallOpts, _owner common.Address) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "balanceOf", _owner)
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "balanceOf", _owner)
+	if err != nil {
+		ret0 := new(*big.Int)
+		return *ret0, err
+	}
+	ret := abi.ConvertType(out[0], new(*big.Int)).(*big.Int)
+	return ret, err
 }
 
 // Decimals is a free data retrieval call binding the contract method 0x313ce567.
 //
 // Solidity: function decimals() constant returns(uint256)
 func (_Token *tokenCaller) Decimals(opts *bind.CallOpts) (*big.Int, error) {
-	var (
-		ret0 = new(*big.Int)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "decimals")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "decimals")
+	if err != nil {
+		ret0 := new(*big.Int)
+		return *ret0, err
+	}
+	ret := abi.ConvertType(out[0], new(*big.Int)).(*big.Int)
+	return ret, err
 }
 
 // Name is a free data retrieval call binding the contract method 0x06fdde03.
 //
 // Solidity: function name() constant returns(string)
 func (_Token *tokenCaller) Name(opts *bind.CallOpts) (string, error) {
-	var (
-		ret0 = new(string)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "name")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "name")
+	if err != nil {
+		ret0 := new(string)
+		return *ret0, err
+	}
+	ret := abi.ConvertType(out[0], new(string)).(string)
+	return ret, err
 }
 
 // Symbol is a free data retrieval call binding the contract method 0x95d89b41.
 //
 // Solidity: function symbol() constant returns(string)
 func (_Token *tokenCaller) Symbol(opts *bind.CallOpts) (string, error) {
-	var (
-		ret0 = new(string)
-	)
-	out := ret0
-	err := _Token.contract.Call(opts, out, "symbol")
-	return *ret0, err
+	var out []interface{}
+	err := _Token.contract.Call(opts, &out, "symbol")
+	if err != nil {
+		ret0 := new(string)
+		return *ret0, err
+	}
+	ret := abi.ConvertType(out[0], new(string)).(string)
+	return ret, err
 }

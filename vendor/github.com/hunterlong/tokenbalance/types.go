@@ -2,9 +2,8 @@ package tokenbalance
 
 import (
 	"context"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
+	"math/big"
 )
 
 type Config struct {
