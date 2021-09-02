@@ -228,6 +228,34 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 	return &ConfluxWallet{cfg, client, nil, &CfxAddress{address}, reg, nil, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
 }
 
+// Params - return nil to comply
+func (wallet *ConfluxWallet) Params() *chaincfg.Params {
+	return nil
+}
+
+// GetBalance returns the balance for the wallet
+func (wallet *ConfluxWallet) GetBalance() (*big.Int, error) {
+	return wallet.client.getBalance()
+}
+
+// GetUnconfirmedBalance returns the unconfirmed balance for the wallet
+func (wallet *ConfluxWallet) GetUnconfirmedBalance() (*big.Int, error) {
+	return wallet.client.getUnconfirmedBalance()
+}
+
+// Transfer will transfer the amount from this wallet to the spec address
+func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, fee big.Int) (types.Hash, error) {
+	networkID, _ := wallet.client.GetNetworkID()
+	toAddress, err := cfxaddress.New(to, networkID)
+	if err != nil {
+		return "", err
+	}
+
+	val := hexutil.Big(*value)
+	feeVal := hexutil.Big(fee)
+	return wallet.client.Transfer(*wallet.address.address, toAddress, &val, spendAll, &feeVal)
+}
+
 // Start will start the wallet daemon
 func (wallet *ConfluxWallet) Start() {
 	done = make(chan bool)
@@ -328,18 +356,22 @@ func (wallet *ConfluxWallet) processBalanceChange(previousBalance, currentBalanc
 	}
 }
 
-// Close will stop the wallet daemon
-func (wallet *ConfluxWallet) Close() {
-	// stop the wallet daemon
-	done <- true
-	doneBalanceTicker <- true
+func (wallet *ConfluxWallet) invokeTxnCB(txnID string, value *big.Int) {
+	txncb := wi.TransactionCallback{
+		Txid:      util.EnsureCorrectPrefix(txnID),
+		Outputs:   []wi.TransactionOutput{},
+		Inputs:    []wi.TransactionInput{},
+		Height:    0,
+		Timestamp: time.Now(),
+		Value:     *value,
+		WatchOnly: false,
+	}
+	for _, l := range wallet.listeners {
+		go l(txncb)
+	}
 }
 
-// Params - return nil to comply
-func (wallet *ConfluxWallet) Params() *chaincfg.Params {
-	return nil
-}
-
+// CurrencyCode returns CFX
 func (wallet *ConfluxWallet) CurrencyCode() string {
 	CurrencyCode := "CFX"
 	if wallet.cfg.CoinType == wi.TestnetConflux {
@@ -349,22 +381,49 @@ func (wallet *ConfluxWallet) CurrencyCode() string {
 	return CurrencyCode
 }
 
-// AddWatchedAddresses - Add a script to the wallet and get notifications back when coins are received or spent from it
-func (wallet *ConfluxWallet) AddWatchedAddresses(addrs ...btcutil.Address) error {
-	// the reason cfx wallet cannot use this as of now is because only the address
-	// is insufficient, the redeemScript is also required
-	return nil
-}
-
-// AddTransactionListener will call the function callback when new transactions are discovered
-func (wallet *ConfluxWallet) AddTransactionListener(callback func(wi.TransactionCallback)) {
-	// add incoming txn listener using service
-	wallet.listeners = append(wallet.listeners, callback)
-}
-
 // IsDust Check if this amount is considered dust - 10000 drip
 func (wallet *ConfluxWallet) IsDust(amount big.Int) bool {
 	return amount.Cmp(big.NewInt(10000)) <= 0
+}
+
+// MasterPrivateKey - Get the master private key
+func (wallet *ConfluxWallet) MasterPrivateKey() *hd.ExtendedKey {
+	privateKey := wallet.getPrivateKey()
+
+	defaultAccount, _ := wallet.am.GetDefault()
+	commonAddr, _, _ := defaultAccount.ToCommon()
+
+	return hd.NewExtendedKey([]byte{0x00, 0x00, 0x00, 0x00}, privateKey.D.Bytes(),
+		commonAddr.Bytes(), commonAddr.Bytes(), 0, 0, true)
+}
+
+// MasterPublicKey - Get the master public key
+func (wallet *ConfluxWallet) MasterPublicKey() *hd.ExtendedKey {
+	privateKey := wallet.getPrivateKey()
+
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		log.Fatal("error casting public key to ECDSA")
+	}
+
+	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
+
+	defaultAccount, _ := wallet.am.GetDefault()
+	commonAddr, _, _ := defaultAccount.ToCommon()
+	return hd.NewExtendedKey([]byte{0x00, 0x00, 0x00, 0x00}, publicKeyBytes,
+		commonAddr.Bytes(), commonAddr.Bytes(), 0, 0, false)
+}
+
+func (wallet *ConfluxWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKey bool) (*hd.ExtendedKey, error) {
+	// TODO: Add REAL CHILD KEY of public or private key for conflux
+	parentFP := []byte{0x00, 0x00, 0x00, 0x00}
+	version := []byte{0x04, 0x88, 0xad, 0xe4} // starts with xprv
+	if !isPrivateKey {
+		version = []byte{0x04, 0x88, 0xb2, 0x1e}
+	}
+
+	return hd.NewExtendedKey(version, keyBytes, chaincode, parentFP, 0, 0, isPrivateKey), nil
 }
 
 // CurrentAddress - Get the current address for the given purpose
@@ -414,14 +473,12 @@ func (wallet *ConfluxWallet) ScriptToAddress(script []byte) (btcutil.Address, er
 	return wallet.address, nil
 }
 
-// GetBalance returns the balance for the wallet
-func (wallet *ConfluxWallet) GetBalance() (*big.Int, error) {
-	return wallet.client.getBalance()
-}
-
-// GetUnconfirmedBalance returns the unconfirmed balance for the wallet
-func (wallet *ConfluxWallet) GetUnconfirmedBalance() (*big.Int, error) {
-	return wallet.client.getUnconfirmedBalance()
+// HasKey - Returns if the wallet has the key for the given address
+func (wallet *ConfluxWallet) HasKey(addr btcutil.Address) bool {
+	if !util.IsValidAddress(addr.String()) {
+		return false
+	}
+	return wallet.address.String() == addr.String()
 }
 
 // Balance - Get the confirmed and unconfirmed balances
@@ -552,7 +609,7 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 
 	return wi.Txn{
 		Txid:        tx.Hash.String(),
-		Value:       valueSub.String(),
+		Value:       tx.Value.ToInt().String(),
 		Height:      0,
 		Timestamp:   time.Now(),
 		WatchOnly:   false,
@@ -561,17 +618,17 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		FromAddress: fromAddr.String(),
 		Outputs: []wi.TransactionOutput{
 			{
-				Address: CfxAddress{tx.To},
+				Address: CfxAddress{toAddr},
 				Value:   *valueSub,
 				Index:   0,
 			},
 			{
-				Address: CfxAddress{&tx.From},
+				Address: CfxAddress{&fromAddr},
 				Value:   *valueSub,
 				Index:   1,
 			},
 			{
-				Address: CfxAddress{tx.To},
+				Address: CfxAddress{toAddr},
 				Value:   *valueSub,
 				Index:   2,
 			},
@@ -595,24 +652,9 @@ func (wallet *ConfluxWallet) ChainTip() (uint32, chainhash.Hash) {
 	return uint32(status.EpochNumber), *h
 }
 
-// ReSyncBlockchain - Use this to re-download merkle blocks in case of missed transactions
-func (wallet *ConfluxWallet) ReSyncBlockchain(fromTime time.Time) {
-	// use service here
-}
-
-// GetConfirmations - Return the number of confirmations and the height for a transaction
-func (wallet *ConfluxWallet) GetConfirmations(txid chainhash.Hash) (confirms, atHeight uint32, err error) {
-	tx, err := wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
-	if err != nil {
-		return 0, 0, err
-	}
-
-	highestEpoch, err := wallet.client.GetEpochNumber()
-
-	ucfs := big.NewInt(0)
-	ucfs.Sub(highestEpoch.ToInt(), tx.EpochHeight.ToInt())
-
-	return uint32(ucfs.Uint64()), uint32(tx.EpochHeight.ToInt().Uint64()), nil
+// GetFeePerByte - Get the current fee per byte
+func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
+	return wallet.client.GetFeePerByte(feeLevel)
 }
 
 func (wallet *ConfluxWallet) getPrivateKey() *ecdsa.PrivateKey {
@@ -625,67 +667,6 @@ func (wallet *ConfluxWallet) getPrivateKey() *ecdsa.PrivateKey {
 	privateKey, _ := crypto.HexToECDSA(keyString)
 
 	return privateKey
-}
-
-// MasterPrivateKey - Get the master private key
-func (wallet *ConfluxWallet) MasterPrivateKey() *hd.ExtendedKey {
-	privateKey := wallet.getPrivateKey()
-
-	defaultAccount, _ := wallet.am.GetDefault()
-	commonAddr, _, _ := defaultAccount.ToCommon()
-
-	return hd.NewExtendedKey([]byte{0x00, 0x00, 0x00, 0x00}, privateKey.D.Bytes(),
-		commonAddr.Bytes(), commonAddr.Bytes(), 0, 0, true)
-}
-
-// MasterPublicKey - Get the master public key
-func (wallet *ConfluxWallet) MasterPublicKey() *hd.ExtendedKey {
-	privateKey := wallet.getPrivateKey()
-
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		log.Fatal("error casting public key to ECDSA")
-	}
-
-	publicKeyBytes := crypto.FromECDSAPub(publicKeyECDSA)
-
-	defaultAccount, _ := wallet.am.GetDefault()
-	commonAddr, _, _ := defaultAccount.ToCommon()
-	return hd.NewExtendedKey([]byte{0x00, 0x00, 0x00, 0x00}, publicKeyBytes,
-		commonAddr.Bytes(), commonAddr.Bytes(), 0, 0, false)
-}
-
-func (wallet *ConfluxWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKey bool) (*hd.ExtendedKey, error) {
-	// TODO: Add REAL CHILD KEY of public or private key for conflux
-	parentFP := []byte{0x00, 0x00, 0x00, 0x00}
-	version := []byte{0x04, 0x88, 0xad, 0xe4} // starts with xprv
-	if !isPrivateKey {
-		version = []byte{0x04, 0x88, 0xb2, 0x1e}
-	}
-
-	return hd.NewExtendedKey(version, keyBytes, chaincode, parentFP, 0, 0, isPrivateKey), nil
-}
-
-// HasKey - Returns if the wallet has the key for the given address
-func (wallet *ConfluxWallet) HasKey(addr btcutil.Address) bool {
-	if !util.IsValidAddress(addr.String()) {
-		return false
-	}
-	return wallet.address.String() == addr.String()
-}
-
-// Transfer will transfer the amount from this wallet to the spec address
-func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, fee big.Int) (types.Hash, error) {
-	networkID, _ := wallet.client.GetNetworkID()
-	toAddress, err := cfxaddress.New(to, networkID)
-	if err != nil {
-		return "", err
-	}
-
-	val := hexutil.Big(*value)
-	feeVal := hexutil.Big(fee)
-	return wallet.client.Transfer(*wallet.address.address, toAddress, &val, spendAll, &feeVal)
 }
 
 func (wallet *ConfluxWallet) getSpendGas(amount big.Int, addr btcutil.Address, feeLevel wi.FeeLevel) big.Int {
@@ -810,21 +791,6 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 	return h, nil
 }
 
-func (wallet *ConfluxWallet) invokeTxnCB(txnID string, value *big.Int) {
-	txncb := wi.TransactionCallback{
-		Txid:      util.EnsureCorrectPrefix(txnID),
-		Outputs:   []wi.TransactionOutput{},
-		Inputs:    []wi.TransactionInput{},
-		Height:    0,
-		Timestamp: time.Now(),
-		Value:     *value,
-		WatchOnly: false,
-	}
-	for _, l := range wallet.listeners {
-		go l(txncb)
-	}
-}
-
 func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress btcutil.Address, value big.Int, bTime time.Time, withInput bool) wi.TransactionCallback {
 	output := wi.TransactionOutput{
 		Address: toAddress,
@@ -929,11 +895,6 @@ func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.Tr
 		sum.Add(sum, gas.ToInt())
 	}
 	return *sum
-}
-
-// GetFeePerByte - Get the current fee per byte
-func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
-	return wallet.client.GetFeePerByte(feeLevel)
 }
 
 // EstimateSpendFee - Build a spend transaction for the amount and return the transaction fee
@@ -1478,6 +1439,46 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 	}
 
 	return hash.ToCommonHash().Bytes(), nil
+}
+
+// AddWatchedAddresses - Add a script to the wallet and get notifications back when coins are received or spent from it
+func (wallet *ConfluxWallet) AddWatchedAddresses(addrs ...btcutil.Address) error {
+	// the reason cfx wallet cannot use this as of now is because only the address
+	// is insufficient, the redeemScript is also required
+	return nil
+}
+
+// AddTransactionListener will call the function callback when new transactions are discovered
+func (wallet *ConfluxWallet) AddTransactionListener(callback func(wi.TransactionCallback)) {
+	// add incoming txn listener using service
+	wallet.listeners = append(wallet.listeners, callback)
+}
+
+// ReSyncBlockchain - Use this to re-download merkle blocks in case of missed transactions
+func (wallet *ConfluxWallet) ReSyncBlockchain(fromTime time.Time) {
+	// use service here
+}
+
+// GetConfirmations - Return the number of confirmations and the height for a transaction
+func (wallet *ConfluxWallet) GetConfirmations(txid chainhash.Hash) (confirms, atHeight uint32, err error) {
+	tx, err := wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
+	if err != nil {
+		return 0, 0, err
+	}
+
+	highestEpoch, err := wallet.client.GetEpochNumber()
+
+	ucfs := big.NewInt(0)
+	ucfs.Sub(highestEpoch.ToInt(), tx.EpochHeight.ToInt())
+
+	return uint32(ucfs.Uint64()), uint32(tx.EpochHeight.ToInt().Uint64()), nil
+}
+
+// Close will stop the wallet daemon
+func (wallet *ConfluxWallet) Close() {
+	// stop the wallet daemon
+	done <- true
+	doneBalanceTicker <- true
 }
 
 // GenDefaultKeyStore will generate a default keystore
