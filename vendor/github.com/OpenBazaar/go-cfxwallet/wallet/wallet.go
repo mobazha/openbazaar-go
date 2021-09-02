@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"cfxabigen/bind"
+
 	sdk "github.com/Conflux-Chain/go-conflux-sdk"
 	"github.com/Conflux-Chain/go-conflux-sdk/types"
 	"github.com/Conflux-Chain/go-conflux-sdk/types/cfxaddress"
@@ -150,6 +152,9 @@ type ConfluxWallet struct {
 	am      *sdk.AccountManager
 	address *CfxAddress
 
+	registry *Registry
+	ppsct    *Escrow
+
 	db            wi.Datastore
 	exchangeRates wi.ExchangeRates
 	listeners     []func(wi.TransactionCallback)
@@ -195,9 +200,32 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 	}
 	log.Infof("The address is: %v", address.String())
 
+	var regAddr interface{}
+	var ok bool
+	registryKey := "RegistryAddress"
+	if strings.Contains(cfg.ClientAPIs[0], "testnet") {
+		registryKey = "TestnetRegistryAddress"
+	} else if strings.Contains(cfg.ClientAPIs[0], "tethys") {
+		registryKey = "TethysRegistryAddress"
+	}
+	if regAddr, ok = cfg.Options[registryKey]; !ok {
+		log.Errorf("conflux registry not found: %s", cfg.Options[registryKey])
+		return nil, err
+	}
+
+	registryAddress, err := cfxaddress.New(regAddr.(string), networkID)
+	if err != nil {
+		log.Fatalf("error get contract adress: %s", err.Error())
+	}
+
+	reg, err := NewRegistry(registryAddress, client)
+	if err != nil {
+		log.Fatalf("error initilaizing contract failed: %s", err.Error())
+	}
+
 	er := NewConfluxPriceFetcher(proxy)
 
-	return &ConfluxWallet{cfg, client, nil, &CfxAddress{address}, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
+	return &ConfluxWallet{cfg, client, nil, &CfxAddress{address}, reg, nil, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
 }
 
 // Start will start the wallet daemon
@@ -319,11 +347,6 @@ func (wallet *ConfluxWallet) CurrencyCode() string {
 	}
 
 	return CurrencyCode
-}
-
-// ExchangeRates - return the exchangerates
-func (wallet *ConfluxWallet) ExchangeRates() wi.ExchangeRates {
-	return wallet.exchangeRates
 }
 
 // AddWatchedAddresses - Add a script to the wallet and get notifications back when coins are received or spent from it
@@ -513,29 +536,43 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		return wi.Txn{}, errors.New("tx is nil!!!, txid: " + txid.String())
 	}
 
+	fromAddr := tx.From
+	toAddr := tx.To
+	valueSub := big.NewInt(5000000)
+
+	v, err := wallet.registry.GetRecommendedVersion(nil, "escrow")
+	if err == nil {
+		if tx.To.String() == v.Implementation.String() {
+			toAddr = wallet.address.address
+		}
+		if tx.Value.ToInt().Cmp(valueSub) > 0 {
+			valueSub = tx.Value.ToInt()
+		}
+	}
+
 	return wi.Txn{
 		Txid:        tx.Hash.String(),
-		Value:       tx.Value.ToInt().String(),
+		Value:       valueSub.String(),
 		Height:      0,
 		Timestamp:   time.Now(),
 		WatchOnly:   false,
 		Bytes:       []byte(tx.Data),
-		ToAddress:   tx.To.String(),
-		FromAddress: tx.From.String(),
+		ToAddress:   toAddr.String(),
+		FromAddress: fromAddr.String(),
 		Outputs: []wi.TransactionOutput{
 			{
 				Address: CfxAddress{tx.To},
-				Value:   *tx.Value.ToInt(),
+				Value:   *valueSub,
 				Index:   0,
 			},
 			{
 				Address: CfxAddress{&tx.From},
-				Value:   *tx.Value.ToInt(),
+				Value:   *valueSub,
 				Index:   1,
 			},
 			{
 				Address: CfxAddress{tx.To},
-				Value:   *tx.Value.ToInt(),
+				Value:   *valueSub,
 				Index:   2,
 			},
 		},
@@ -709,6 +746,8 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			}
 		}
 
+		networkID, _ := wallet.client.GetNetworkID()
+
 		if isScript {
 			cfxScript, err := DeserializeCfxScript(redeemScript)
 			if err != nil {
@@ -718,14 +757,18 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			if err != nil {
 				log.Error(err.Error())
 			}
-			addrScrHash := common.HexToAddress(scrHash)
+			addrScrHash, err := cfxaddress.NewFromHex(scrHash, networkID)
+			if err != nil {
+				log.Errorf("error to get script address: %v", err)
+				return nil, err
+			}
 			log.Info(addrScrHash)
-			// actualRecipient = CfxAddress{address: &addrScrHash}
-			// hash, _, err = wallet.callAddTransaction(cfxScript, &amount, feeLevel)
-			// if err != nil {
-			// 	log.Errorf("error call add txn: %v", err)
-			// 	return nil, wi.ErrInsufficientFunds
-			// }
+			actualRecipient = CfxAddress{address: &addrScrHash}
+			hash, _, err = wallet.callAddTransaction(cfxScript, &amount, feeLevel)
+			if err != nil {
+				log.Errorf("error call add txn: %v", err)
+				return nil, wi.ErrInsufficientFunds
+			}
 			return nil, wi.ErrInsufficientFunds
 		} else {
 			if !wallet.client.balanceCheck(feeLevel, amount) {
@@ -782,9 +825,310 @@ func (wallet *ConfluxWallet) invokeTxnCB(txnID string, value *big.Int) {
 	}
 }
 
+func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress btcutil.Address, value big.Int, bTime time.Time, withInput bool) wi.TransactionCallback {
+	output := wi.TransactionOutput{
+		Address: toAddress,
+		Value:   value,
+		Index:   1,
+		OrderID: orderID,
+	}
+
+	input := wi.TransactionInput{}
+
+	if withInput {
+		input = wi.TransactionInput{
+			OutpointHash:  []byte(util.EnsureCorrectPrefix(txID)),
+			OutpointIndex: 1,
+			LinkedAddress: toAddress,
+			Value:         value,
+			OrderID:       orderID,
+		}
+
+	}
+
+	return wi.TransactionCallback{
+		Txid:      util.EnsureCorrectPrefix(txID),
+		Outputs:   []wi.TransactionOutput{output},
+		Inputs:    []wi.TransactionInput{input},
+		Height:    1,
+		Timestamp: time.Now(),
+		Value:     value,
+		WatchOnly: false,
+		BlockTime: bTime,
+	}
+}
+
+func (wallet *ConfluxWallet) AssociateTransactionWithOrder(txnCB wi.TransactionCallback) {
+	for _, l := range wallet.listeners {
+		go l(txnCB)
+	}
+}
+
+// checkTxnRcpt check the txn rcpt status
+func (wallet *ConfluxWallet) checkTxnRcpt(hash types.Hash, data []byte) (*types.Hash, error) {
+	pTxn, err := DeserializePendingTxn(data)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := wallet.client.GetTransactionByHash(hash)
+	if err != nil {
+		log.Infof("fetching txn rcpt: %v", err)
+	}
+
+	if tx != nil {
+		// good. so the txn has been processed but we have to account for failed
+		// but valid txn like some contract condition causing revert
+		if tx.Status != nil {
+			// all good to update order state
+			chash, err := util.CreateChainHash(hash.String())
+			if err != nil {
+				return nil, err
+			}
+			err = wallet.db.Txns().Delete(chash)
+			if err != nil {
+				log.Errorf("err deleting the pending txn : %v", err)
+			}
+			n := new(big.Int)
+			n, _ = n.SetString(pTxn.Amount, 10)
+			withInput := true
+			if pTxn.Amount != "0" {
+				withInput = pTxn.WithInput
+			}
+			toAddr, _ := wallet.DecodeAddress(pTxn.To)
+			go wallet.AssociateTransactionWithOrder(
+				wallet.createTxnCallback(hash.String(), pTxn.OrderID, toAddr,
+					*n, time.Now(), withInput))
+		}
+	}
+	return &hash, nil
+
+}
+
+// BumpFee - Bump the fee for the given transaction
+func (wallet *ConfluxWallet) BumpFee(txid chainhash.Hash) (*chainhash.Hash, error) {
+	return util.CreateChainHash(txid.String())
+}
+
+// EstimateFee - Calculates the estimated size of the transaction and returns the total fee for the given feePerByte
+func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.TransactionOutput, feePerByte big.Int) big.Int {
+	sum := big.NewInt(0)
+	for _, out := range outs {
+		from := wallet.address
+		to, err := wallet.DecodeAddress(out.Address.String())
+		if err != nil {
+			return *sum
+		}
+
+		val := hexutil.Big(out.Value)
+		gas, err := wallet.client.EstimateTxnGas(*from.address,
+			*(to.(*CfxAddress).address), &val)
+		if err != nil {
+			return *sum
+		}
+		sum.Add(sum, gas.ToInt())
+	}
+	return *sum
+}
+
+// GetFeePerByte - Get the current fee per byte
+func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
+	return wallet.client.GetFeePerByte(feeLevel)
+}
+
+// EstimateSpendFee - Build a spend transaction for the amount and return the transaction fee
+func (wallet *ConfluxWallet) EstimateSpendFee(amount big.Int, feeLevel wi.FeeLevel) (big.Int, error) {
+	if !wallet.client.balanceCheck(feeLevel, amount) {
+		return *big.NewInt(0), wi.ErrInsufficientFunds
+	}
+
+	val := hexutil.Big(amount)
+	return wallet.client.EstimateGasSpend(*wallet.address.address, &val)
+}
+
+// SweepAddress - Build and broadcast a transaction that sweeps all coins from an address. If it is a p2sh multisig, the redeemScript must be included
+func (wallet *ConfluxWallet) SweepAddress(utxos []wi.TransactionInput, address *btcutil.Address, key *hd.ExtendedKey, redeemScript *[]byte, feeLevel wi.FeeLevel) (*chainhash.Hash, error) {
+
+	outs := []wi.TransactionOutput{}
+	for i, in := range utxos {
+		out := wi.TransactionOutput{
+			Address: wallet.address,
+			Value:   in.Value,
+			Index:   uint32(i),
+			OrderID: in.OrderID,
+		}
+		outs = append(outs, out)
+	}
+
+	sigs, err := wallet.CreateMultisigSignature([]wi.TransactionInput{}, outs, key, *redeemScript, *big.NewInt(1))
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := wallet.Multisign([]wi.TransactionInput{}, outs, sigs, []wi.Signature{}, *redeemScript, *big.NewInt(1), false)
+	if err != nil {
+		return nil, err
+	}
+	hash := common.BytesToHash(data)
+
+	return util.CreateChainHash(hash.Hex())
+}
+
+// ExchangeRates - return the exchangerates
+func (wallet *ConfluxWallet) ExchangeRates() wi.ExchangeRates {
+	return wallet.exchangeRates
+}
+
+func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *big.Int, feeLevel wi.FeeLevel) (types.Hash, uint64, error) {
+	// call registry to get the deployed address for the escrow ct
+	fromAddress := wallet.address.address
+	nonce, err := wallet.client.GetNextNonce(*fromAddress, types.EpochLatestState)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gasPrice, err := wallet.client.GetGasPrice()
+	if err != nil {
+		log.Fatal(err)
+	}
+	gasPriceCFXGAS := wallet.GetFeePerByte(feeLevel)
+	if gasPriceCFXGAS.Int64() < gasPrice.ToInt().Int64() {
+		gasPriceCFXGAS = *gasPrice.ToInt()
+	}
+
+	val := hexutil.Big(*value)
+	auth := &bind.TransactOpts{
+		Nonce:    nonce,
+		Value:    &val, // in wei
+		GasPrice: gasPrice,
+	}
+
+	// lets check if the caller has enough balance to make the
+	// multisign call
+	if !wallet.client.balanceCheck(feeLevel, *big.NewInt(0)) {
+		// the wallet does not have the required balance
+		return "", nonce.ToInt().Uint64(), wi.ErrInsufficientFunds
+	}
+
+	shash, _, err := GenScriptHash(script)
+	if err != nil {
+		return "", nonce.ToInt().Uint64(), err
+	}
+
+	networkID, _ := wallet.client.GetNetworkID()
+	multisigAddress, err := cfxaddress.NewFromCommon(script.MultisigAddress, networkID)
+	if err != nil {
+		log.Fatalf("error converting multi sign address: %s", err.Error())
+	}
+
+	smtct, err := NewEscrow(multisigAddress, wallet.client)
+	if err != nil {
+		log.Fatalf("error initilaizing contract failed: %s", err.Error())
+	}
+
+	var tx *types.UnsignedTransaction
+	var h *types.Hash
+	tx, h, err = smtct.AddTransaction(auth, script.Buyer, script.Seller,
+		script.Moderator, script.Threshold, script.Timeout, shash, script.TxnID)
+	if err != nil {
+		return "", 0, err
+	}
+
+	txns = append(txns, wi.Txn{
+		Txid:      h.String(),
+		Value:     value.String(),
+		Height:    int32(nonce.ToInt().Int64()),
+		Timestamp: time.Now(),
+		WatchOnly: false,
+		Bytes:     tx.Data})
+
+	return *h, nonce.ToInt().Uint64(), err
+
+}
+
 // GenerateMultisigScript - Generate a multisig script from public keys. If a timeout is included the returned script should be a timelocked escrow which releases using the timeoutKey.
 func (wallet *ConfluxWallet) GenerateMultisigScript(keys []hd.ExtendedKey, threshold int, timeout time.Duration, timeoutKey *hd.ExtendedKey) (btcutil.Address, []byte, error) {
-	return nil, []byte{}, nil
+	if uint32(timeout.Hours()) > 0 && timeoutKey == nil {
+		return nil, nil, errors.New("timeout key must be non nil when using an escrow timeout")
+	}
+
+	if len(keys) < threshold {
+		return nil, nil, fmt.Errorf("unable to generate multisig script with "+
+			"%d required signatures when there are only %d public "+
+			"keys available", threshold, len(keys))
+	}
+
+	if len(keys) < 2 {
+		return nil, nil, fmt.Errorf("unable to generate multisig script with "+
+			"%d required signatures when there are only %d public "+
+			"keys available", threshold, len(keys))
+	}
+
+	var ecKeys []common.Address
+	for _, key := range keys {
+		ecKey, err := key.ECPubKey()
+		if err != nil {
+			return nil, nil, err
+		}
+		ePubkey := ecKey.ToECDSA()
+		ecKeys = append(ecKeys, crypto.PubkeyToAddress(*ePubkey))
+	}
+
+	ver, err := wallet.registry.GetRecommendedVersion(nil, "escrow")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if util.IsZeroAddress(ver.Implementation) {
+		return nil, nil, errors.New("no escrow contract available")
+	}
+
+	builder := CfxRedeemScript{}
+
+	builder.TxnID = common.BytesToAddress(util.ExtractChaincode(&keys[0]))
+	builder.Timeout = uint32(timeout.Hours())
+	builder.Threshold = uint8(threshold)
+	builder.Buyer = ecKeys[0]
+	builder.Seller = ecKeys[1]
+	builder.MultisigAddress = ver.Implementation
+
+	if threshold > 1 {
+		builder.Moderator = ecKeys[2]
+	}
+	switch threshold {
+	case 1:
+		{
+			// Seller is offline
+		}
+	case 2:
+		{
+			// Moderated payment
+		}
+	default:
+		{
+			// handle this
+		}
+	}
+
+	redeemScript, err := SerializeCfxScript(builder)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	networkID, _ := wallet.client.GetNetworkID()
+	addr, err := cfxaddress.NewFromHex(hexutil.Encode(crypto.Keccak256(redeemScript)), networkID)
+	if err != nil {
+		log.Fatalf("error converting hex address: %s", err.Error())
+	}
+
+	retAddr := CfxAddress{&addr}
+
+	scriptKey := append(addr.GetBody(), redeemScript...)
+	err = wallet.db.WatchedScripts().Put(scriptKey)
+	if err != nil {
+		log.Errorf("err saving the redeemscript: %v", err)
+	}
+
+	return retAddr, redeemScript, nil
 }
 
 // CreateMultisigSignature - Create a signature for a multisig transaction
@@ -946,157 +1290,194 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 // Multisign - Combine signatures and optionally broadcast
 func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.TransactionOutput, sigs1 []wi.Signature, sigs2 []wi.Signature, redeemScript []byte, feePerByte big.Int, broadcast bool) ([]byte, error) {
 
-	// 由于Conflux暂时未提供类似使用 abigen方式生成的go封装，导致合约不能很好调用，暂不支持多签和仲裁
-	return nil, nil
-}
+	payouts := []wi.TransactionOutput{}
+	difference := new(big.Int)
 
-func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress btcutil.Address, value big.Int, bTime time.Time, withInput bool) wi.TransactionCallback {
-	output := wi.TransactionOutput{
-		Address: toAddress,
-		Value:   value,
-		Index:   1,
-		OrderID: orderID,
-	}
-
-	input := wi.TransactionInput{}
-
-	if withInput {
-		input = wi.TransactionInput{
-			OutpointHash:  []byte(util.EnsureCorrectPrefix(txID)),
-			OutpointIndex: 1,
-			LinkedAddress: toAddress,
-			Value:         value,
-			OrderID:       orderID,
+	if len(ins) > 0 {
+		totalVal := &ins[0].Value
+		outVal := new(big.Int)
+		for _, out := range outs {
+			outVal.Add(outVal, &out.Value)
 		}
-
+		if totalVal.Cmp(outVal) != 0 {
+			if totalVal.Cmp(outVal) < 0 {
+				return nil, errors.New("payout greater than initial amount")
+			}
+			difference.Sub(totalVal, outVal)
+		}
 	}
 
-	return wi.TransactionCallback{
-		Txid:      util.EnsureCorrectPrefix(txID),
-		Outputs:   []wi.TransactionOutput{output},
-		Inputs:    []wi.TransactionInput{input},
-		Height:    1,
+	rScript, err := DeserializeCfxScript(redeemScript)
+	if err != nil {
+		return nil, err
+	}
+
+	indx := []int{}
+	referenceID := ""
+	mbvAddresses := make([]string, 3)
+
+	for i, out := range outs {
+		if out.Value.Cmp(new(big.Int)) > 0 {
+			indx = append(indx, i)
+		}
+		if out.Address.String() == rScript.Moderator.Hex() {
+			indx = append(indx, i)
+			mbvAddresses[0] = out.Address.String()
+		} else if out.Address.String() == rScript.Buyer.Hex() {
+			mbvAddresses[1] = out.Address.String()
+		} else {
+			mbvAddresses[2] = out.Address.String()
+		}
+		p := wi.TransactionOutput{
+			Address: out.Address,
+			Value:   out.Value,
+			Index:   out.Index,
+			OrderID: out.OrderID,
+		}
+		referenceID = out.OrderID
+		payouts = append(payouts, p)
+	}
+
+	if len(indx) > 0 {
+		diff := new(big.Int)
+		delta := new(big.Int)
+		diff.DivMod(difference, big.NewInt(int64(len(indx))), delta)
+		for _, i := range indx {
+			payouts[i].Value.Add(&payouts[i].Value, diff)
+		}
+		payouts[indx[0]].Value.Add(&payouts[indx[0]].Value, delta)
+	}
+
+	sort.Slice(payouts, func(i, j int) bool {
+		return strings.Compare(payouts[i].Address.String(), payouts[j].Address.String()) == -1
+	})
+
+	payables := make(map[string]big.Int)
+	for _, out := range payouts {
+		if out.Value.Cmp(big.NewInt(0)) <= 0 {
+			continue
+		}
+		val := new(big.Int).SetBytes(out.Value.Bytes()) // &out.Value
+		if p, ok := payables[out.Address.String()]; ok {
+			sum := new(big.Int).Add(val, &p)
+			payables[out.Address.String()] = *sum
+		} else {
+			payables[out.Address.String()] = *val
+		}
+	}
+
+	rSlice := [][32]byte{}
+	sSlice := [][32]byte{}
+	vSlice := []uint8{}
+
+	var r [32]byte
+	var s [32]byte
+	var v uint8
+
+	if len(sigs1) > 0 && len(sigs1[0].Signature) > 0 {
+		r, s, v = util.SigRSV(sigs1[0].Signature)
+		rSlice = append(rSlice, r)
+		sSlice = append(sSlice, s)
+		vSlice = append(vSlice, v)
+	}
+
+	if len(sigs2) > 0 && len(sigs2[0].Signature) > 0 {
+		r, s, v = util.SigRSV(sigs2[0].Signature)
+		rSlice = append(rSlice, r)
+		sSlice = append(sSlice, s)
+		vSlice = append(vSlice, v)
+	}
+
+	shash, _, err := GenScriptHash(rScript)
+	if err != nil {
+		return nil, err
+	}
+
+	networkID, _ := wallet.client.GetNetworkID()
+	multisigAddress, err := cfxaddress.NewFromCommon(rScript.MultisigAddress, networkID)
+	if err != nil {
+		log.Fatalf("error converting multi sign address: %s", err.Error())
+	}
+	smtct, err := NewEscrow(multisigAddress, wallet.client)
+	if err != nil {
+		log.Fatalf("error initializing contract failed: %s", err.Error())
+	}
+
+	destinations := []common.Address{}
+	amounts := []*big.Int{}
+
+	for _, k := range mbvAddresses {
+		v := payables[k]
+		if v.Cmp(big.NewInt(0)) == 1 {
+			destinations = append(destinations, common.HexToAddress(k))
+			amounts = append(amounts, new(big.Int).SetBytes(v.Bytes()))
+		}
+	}
+
+	fromAddress := wallet.address.address
+	nonce, err := wallet.client.GetNextNonce(*fromAddress, types.EpochLatestState)
+	if err != nil {
+		log.Fatal(err)
+	}
+	gasPrice, err := wallet.client.GetGasPrice()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auth := &bind.TransactOpts{
+		Nonce:    nonce,
+		GasPrice: gasPrice,
+	}
+
+	// lets check if the caller has enough balance to make the
+	// multisign call
+	requiredBalance := new(big.Int).Mul(gasPrice.ToInt(), big.NewInt(maxGasLimit))
+	currentBalance, err := wallet.GetBalance()
+	if err != nil {
+		log.Error("err fetching eth wallet balance")
+		currentBalance = big.NewInt(0)
+	}
+
+	if requiredBalance.Cmp(currentBalance) > 0 {
+		// the wallet does not have the required balance
+		return nil, wi.ErrInsufficientFunds
+	}
+
+	tx, hash, txnErr := smtct.Execute(auth, vSlice, rSlice, sSlice, shash, destinations, amounts)
+
+	if txnErr != nil {
+		return nil, txnErr
+	}
+
+	txns = append(txns, wi.Txn{
+		Txid:      hash.String(),
+		Value:     "0",
+		Height:    int32(nonce.ToInt().Int64()),
 		Timestamp: time.Now(),
-		Value:     value,
 		WatchOnly: false,
-		BlockTime: bTime,
-	}
-}
+		Bytes:     tx.Data})
 
-func (wallet *ConfluxWallet) AssociateTransactionWithOrder(txnCB wi.TransactionCallback) {
-	for _, l := range wallet.listeners {
-		go l(txnCB)
-	}
-}
-
-// checkTxnRcpt check the txn rcpt status
-func (wallet *ConfluxWallet) checkTxnRcpt(hash types.Hash, data []byte) (*types.Hash, error) {
-	pTxn, err := DeserializePendingTxn(data)
+	// this is a pending txn
+	_, scrHash, err := GenScriptHash(rScript)
 	if err != nil {
-		return nil, err
+		log.Error(err.Error())
 	}
-
-	tx, err := wallet.client.GetTransactionByHash(hash)
-	if err != nil {
-		log.Infof("fetching txn rcpt: %v", err)
-	}
-
-	if tx != nil {
-		// good. so the txn has been processed but we have to account for failed
-		// but valid txn like some contract condition causing revert
-		if tx.Status != nil {
-			// all good to update order state
-			chash, err := util.CreateChainHash(hash.String())
-			if err != nil {
-				return nil, err
-			}
-			err = wallet.db.Txns().Delete(chash)
-			if err != nil {
-				log.Errorf("err deleting the pending txn : %v", err)
-			}
-			n := new(big.Int)
-			n, _ = n.SetString(pTxn.Amount, 10)
-			withInput := true
-			if pTxn.Amount != "0" {
-				withInput = pTxn.WithInput
-			}
-			toAddr, _ := wallet.DecodeAddress(pTxn.To)
-			go wallet.AssociateTransactionWithOrder(
-				wallet.createTxnCallback(hash.String(), pTxn.OrderID, toAddr,
-					*n, time.Now(), withInput))
+	data, err := SerializePendingTxn(PendingTxn{
+		TxnID:   *hash,
+		Amount:  "0",
+		OrderID: referenceID,
+		Nonce:   int32(nonce.ToInt().Int64()),
+		From:    wallet.address.EncodeAddress(),
+		To:      scrHash,
+	})
+	if err == nil {
+		err0 := wallet.db.Txns().Put(data, ut.NormalizeAddress(hash.String()), "0", 0, time.Now(), true)
+		if err0 != nil {
+			log.Error(err0.Error())
 		}
 	}
-	return &hash, nil
 
-}
-
-// BumpFee - Bump the fee for the given transaction
-func (wallet *ConfluxWallet) BumpFee(txid chainhash.Hash) (*chainhash.Hash, error) {
-	return util.CreateChainHash(txid.String())
-}
-
-// EstimateFee - Calculates the estimated size of the transaction and returns the total fee for the given feePerByte
-func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.TransactionOutput, feePerByte big.Int) big.Int {
-	sum := big.NewInt(0)
-	for _, out := range outs {
-		from := wallet.address
-		to, err := wallet.DecodeAddress(out.Address.String())
-		if err != nil {
-			return *sum
-		}
-
-		val := hexutil.Big(out.Value)
-		gas, err := wallet.client.EstimateTxnGas(*from.address,
-			*(to.(*CfxAddress).address), &val)
-		if err != nil {
-			return *sum
-		}
-		sum.Add(sum, gas.ToInt())
-	}
-	return *sum
-}
-
-// GetFeePerByte - Get the current fee per byte
-func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
-	return wallet.client.GetFeePerByte(feeLevel)
-}
-
-// EstimateSpendFee - Build a spend transaction for the amount and return the transaction fee
-func (wallet *ConfluxWallet) EstimateSpendFee(amount big.Int, feeLevel wi.FeeLevel) (big.Int, error) {
-	if !wallet.client.balanceCheck(feeLevel, amount) {
-		return *big.NewInt(0), wi.ErrInsufficientFunds
-	}
-
-	val := hexutil.Big(amount)
-	return wallet.client.EstimateGasSpend(*wallet.address.address, &val)
-}
-
-// SweepAddress - Build and broadcast a transaction that sweeps all coins from an address. If it is a p2sh multisig, the redeemScript must be included
-func (wallet *ConfluxWallet) SweepAddress(utxos []wi.TransactionInput, address *btcutil.Address, key *hd.ExtendedKey, redeemScript *[]byte, feeLevel wi.FeeLevel) (*chainhash.Hash, error) {
-
-	outs := []wi.TransactionOutput{}
-	for i, in := range utxos {
-		out := wi.TransactionOutput{
-			Address: wallet.address,
-			Value:   in.Value,
-			Index:   uint32(i),
-			OrderID: in.OrderID,
-		}
-		outs = append(outs, out)
-	}
-
-	sigs, err := wallet.CreateMultisigSignature([]wi.TransactionInput{}, outs, key, *redeemScript, *big.NewInt(1))
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := wallet.Multisign([]wi.TransactionInput{}, outs, sigs, []wi.Signature{}, *redeemScript, *big.NewInt(1), false)
-	if err != nil {
-		return nil, err
-	}
-	hash := common.BytesToHash(data)
-
-	return util.CreateChainHash(hash.Hex())
+	return hash.ToCommonHash().Bytes(), nil
 }
 
 // GenDefaultKeyStore will generate a default keystore
