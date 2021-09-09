@@ -202,18 +202,16 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 
 	var regAddr interface{}
 	var ok bool
-	registryKey := "RegistryAddress"
+	registryKey := "TestnetRegistryAddress"
 	if strings.Contains(cfg.ClientAPIs[0], "testnet") {
 		registryKey = "TestnetRegistryAddress"
-	} else if strings.Contains(cfg.ClientAPIs[0], "tethys") {
-		registryKey = "TethysRegistryAddress"
 	}
 	if regAddr, ok = cfg.Options[registryKey]; !ok {
 		log.Errorf("conflux registry not found: %s", cfg.Options[registryKey])
 		return nil, err
 	}
 
-	registryAddress, err := cfxaddress.New(regAddr.(string), networkID)
+	registryAddress, err := cfxaddress.NewFromBase32(regAddr.(string))
 	if err != nil {
 		log.Fatalf("error get contract adress: %s", err.Error())
 	}
@@ -225,7 +223,7 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 
 	er := NewConfluxPriceFetcher(proxy)
 
-	return &ConfluxWallet{cfg, client, nil, &CfxAddress{address}, reg, nil, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
+	return &ConfluxWallet{cfg, client, am, &CfxAddress{address}, reg, nil, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
 }
 
 // Params - return nil to comply
@@ -438,18 +436,22 @@ func (wallet *ConfluxWallet) NewAddress(purpose wi.KeyPurpose) btcutil.Address {
 
 // DecodeAddress - Parse the address string and return an address interface
 func (wallet *ConfluxWallet) DecodeAddress(addr string) (btcutil.Address, error) {
-	networkID, _ := wallet.client.GetNetworkID()
 	if len(addr) > 64 {
 		commonAddr, err := cfxScriptToAddr(addr)
 		if err != nil {
 			log.Error(err.Error())
 		}
-
-		cfxAddr, err := cfxaddress.NewFromCommon(commonAddr, networkID)
-		return &CfxAddress{&cfxAddr}, err
+		return EthAddress{&commonAddr}, err
 	}
 
-	return NewCfxAddress(addr, networkID)
+	cfxAddr, err := cfxaddress.NewFromBase32(addr)
+	if err == nil {
+		commonAddr, _, _ := cfxAddr.ToCommon()
+		return EthAddress{&commonAddr}, err
+	}
+
+	commonAddr := common.HexToAddress(addr)
+	return EthAddress{&commonAddr}, nil
 }
 
 func cfxScriptToAddr(addr string) (common.Address, error) {
@@ -486,10 +488,18 @@ func (wallet *ConfluxWallet) Balance() (confirmed, unconfirmed wi.CurrencyValue)
 	var balance, ucbalance wi.CurrencyValue
 	bal, err := wallet.GetBalance()
 	if err == nil {
+		if bal == nil {
+			bal = big.NewInt(0)
+		}
+
 		balance = wi.CurrencyValue{
 			Value:    *bal,
 			Currency: CfxCurrencyDefinition,
 		}
+	}
+
+	if bal == nil {
+		bal = big.NewInt(0)
 	}
 	ucbal, err := wallet.GetUnconfirmedBalance()
 	ucb := big.NewInt(0)
@@ -727,8 +737,6 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			}
 		}
 
-		networkID, _ := wallet.client.GetNetworkID()
-
 		if isScript {
 			cfxScript, err := DeserializeCfxScript(redeemScript)
 			if err != nil {
@@ -738,19 +746,13 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			if err != nil {
 				log.Error(err.Error())
 			}
-			addrScrHash, err := cfxaddress.NewFromHex(scrHash, networkID)
-			if err != nil {
-				log.Errorf("error to get script address: %v", err)
-				return nil, err
-			}
-			log.Info(addrScrHash)
-			actualRecipient = CfxAddress{address: &addrScrHash}
+			addrScrHash := common.HexToAddress(scrHash)
+			actualRecipient = EthAddress{address: &addrScrHash}
 			hash, _, err = wallet.callAddTransaction(cfxScript, &amount, feeLevel)
 			if err != nil {
 				log.Errorf("error call add txn: %v", err)
 				return nil, wi.ErrInsufficientFunds
 			}
-			return nil, wi.ErrInsufficientFunds
 		} else {
 			if !wallet.client.balanceCheck(feeLevel, amount) {
 				return nil, wi.ErrInsufficientFunds
@@ -791,7 +793,7 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 	return h, nil
 }
 
-func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress btcutil.Address, value big.Int, bTime time.Time, withInput bool) wi.TransactionCallback {
+func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress btcutil.Address, value big.Int, bTime time.Time, withInput bool, height int64) wi.TransactionCallback {
 	output := wi.TransactionOutput{
 		Address: toAddress,
 		Value:   value,
@@ -811,12 +813,11 @@ func (wallet *ConfluxWallet) createTxnCallback(txID, orderID string, toAddress b
 		}
 
 	}
-
 	return wi.TransactionCallback{
 		Txid:      util.EnsureCorrectPrefix(txID),
 		Outputs:   []wi.TransactionOutput{output},
 		Inputs:    []wi.TransactionInput{input},
-		Height:    1,
+		Height:    int32(height),
 		Timestamp: time.Now(),
 		Value:     value,
 		WatchOnly: false,
@@ -862,9 +863,10 @@ func (wallet *ConfluxWallet) checkTxnRcpt(hash types.Hash, data []byte) (*types.
 				withInput = pTxn.WithInput
 			}
 			toAddr, _ := wallet.DecodeAddress(pTxn.To)
+			height := tx.EpochHeight.ToInt().Int64()
 			go wallet.AssociateTransactionWithOrder(
 				wallet.createTxnCallback(hash.String(), pTxn.OrderID, toAddr,
-					*n, time.Now(), withInput))
+					*n, time.Now(), withInput, height))
 		}
 	}
 	return &hash, nil
@@ -946,10 +948,14 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 	nonce, err := wallet.client.GetNextNonce(*fromAddress, types.EpochLatestState)
 	if err != nil {
 		log.Fatal(err)
+		log.Errorf("err get next nonce: %v", err)
+		return "", 0, err
 	}
 	gasPrice, err := wallet.client.GetGasPrice()
 	if err != nil {
 		log.Fatal(err)
+		log.Errorf("err get gas price: %v", err)
+		return "", 0, err
 	}
 	gasPriceCFXGAS := wallet.GetFeePerByte(feeLevel)
 	if gasPriceCFXGAS.Int64() < gasPrice.ToInt().Int64() {
@@ -957,7 +963,7 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 	}
 
 	val := hexutil.Big(*value)
-	auth := &bind.TransactOpts{
+	transactOpts := &bind.TransactOpts{
 		Nonce:    nonce,
 		Value:    &val, // in wei
 		GasPrice: gasPrice,
@@ -965,7 +971,7 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 
 	// lets check if the caller has enough balance to make the
 	// multisign call
-	if !wallet.client.balanceCheck(feeLevel, *big.NewInt(0)) {
+	if !wallet.client.balanceCheck(feeLevel, *value) {
 		// the wallet does not have the required balance
 		return "", nonce.ToInt().Uint64(), wi.ErrInsufficientFunds
 	}
@@ -978,17 +984,24 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 	networkID, _ := wallet.client.GetNetworkID()
 	multisigAddress, err := cfxaddress.NewFromCommon(script.MultisigAddress, networkID)
 	if err != nil {
-		log.Fatalf("error converting multi sign address: %s", err.Error())
+		log.Errorf("error converting multi sign address: %s", err.Error())
+		return "", nonce.ToInt().Uint64(), err
 	}
 
 	smtct, err := NewEscrow(multisigAddress, wallet.client)
 	if err != nil {
-		log.Fatalf("error initilaizing contract failed: %s", err.Error())
+		log.Errorf("error initilaizing contract failed: %s", err.Error())
+		return "", nonce.ToInt().Uint64(), err
+	}
+
+	err = wallet.client.AccountManager.TimedUnlockDefault("", 30*time.Second)
+	if err != nil {
+		return "", nonce.ToInt().Uint64(), errors.New("account manager failed to unlock default address")
 	}
 
 	var tx *types.UnsignedTransaction
 	var h *types.Hash
-	tx, h, err = smtct.AddTransaction(auth, script.Buyer, script.Seller,
+	tx, h, err = smtct.AddTransaction(transactOpts, script.Buyer, script.Seller,
 		script.Moderator, script.Threshold, script.Timeout, shash, script.TxnID)
 	if err != nil {
 		return "", 0, err
@@ -1075,15 +1088,10 @@ func (wallet *ConfluxWallet) GenerateMultisigScript(keys []hd.ExtendedKey, thres
 		return nil, nil, err
 	}
 
-	networkID, _ := wallet.client.GetNetworkID()
-	addr, err := cfxaddress.NewFromHex(hexutil.Encode(crypto.Keccak256(redeemScript)), networkID)
-	if err != nil {
-		log.Fatalf("error converting hex address: %s", err.Error())
-	}
+	addr := common.HexToAddress(hexutil.Encode(crypto.Keccak256(redeemScript))) //hash.Sum(nil)[:]))
+	retAddr := EthAddress{&addr}
 
-	retAddr := CfxAddress{&addr}
-
-	scriptKey := append(addr.GetBody(), redeemScript...)
+	scriptKey := append(addr.Bytes(), redeemScript...)
 	err = wallet.db.WatchedScripts().Put(scriptKey)
 	if err != nil {
 		log.Errorf("err saving the redeemscript: %v", err)
@@ -1385,7 +1393,7 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 		log.Fatal(err)
 	}
 
-	auth := &bind.TransactOpts{
+	transactOpts := &bind.TransactOpts{
 		Nonce:    nonce,
 		GasPrice: gasPrice,
 	}
@@ -1395,7 +1403,7 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 	requiredBalance := new(big.Int).Mul(gasPrice.ToInt(), big.NewInt(maxGasLimit))
 	currentBalance, err := wallet.GetBalance()
 	if err != nil {
-		log.Error("err fetching eth wallet balance")
+		log.Error("err fetching cfx wallet balance")
 		currentBalance = big.NewInt(0)
 	}
 
@@ -1404,7 +1412,7 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 		return nil, wi.ErrInsufficientFunds
 	}
 
-	tx, hash, txnErr := smtct.Execute(auth, vSlice, rSlice, sSlice, shash, destinations, amounts)
+	tx, hash, txnErr := smtct.Execute(transactOpts, vSlice, rSlice, sSlice, shash, destinations, amounts)
 
 	if txnErr != nil {
 		return nil, txnErr
