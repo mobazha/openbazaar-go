@@ -1002,7 +1002,7 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 		return "", nonce.ToInt().Uint64(), err
 	}
 
-	err = wallet.client.AccountManager.TimedUnlockDefault("", 30*time.Second)
+	err = wallet.client.AccountManager.UnlockDefault("")
 	if err != nil {
 		return "", nonce.ToInt().Uint64(), errors.New("account manager failed to unlock default address")
 	}
@@ -1445,6 +1445,11 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 
 	for i := 0; i < len(destinations); i++ {
 		fmt.Printf("\n i: %v, destinations: %v, amounts: %v\n", i, destinations[i], amounts[i])
+	}
+
+	err = wallet.client.AccountManager.UnlockDefault("")
+	if err != nil {
+		return nil, errors.New("account manager failed to unlock default address")
 	}
 
 	tx, hash, txnErr := smtct.Execute(transactOpts, vSlice, rSlice, sSlice, shash, destinations, amounts)
