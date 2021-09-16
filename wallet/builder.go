@@ -186,7 +186,7 @@ func createAPIWallet(coin wallet.CoinType, coinConfigOverrides *schema.CoinConfi
 		} else {
 			actualCoin = wallet.Conflux
 		}
-		w, err := cfx.NewConfluxWallet(*coinConfig, cfg.Mnemonic, cfg.RepoPath, cfg.Proxy)
+		w, err := cfx.NewConfluxWallet(*coinConfig, cfg.Params, cfg.Mnemonic, cfg.RepoPath, cfg.Proxy)
 		if err != nil {
 			return InvalidCoinType, nil, err
 		}

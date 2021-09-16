@@ -1,10 +1,13 @@
 package wallet
 
 import (
+	"encoding/hex"
+
 	"github.com/Conflux-Chain/go-conflux-sdk/types/cfxaddress"
 	"github.com/btcsuite/btcd/chaincfg"
+	hd "github.com/btcsuite/btcutil/hdkeychain"
 	"github.com/ethereum/go-ethereum/common"
-	hdwallet "github.com/miguelmota/go-ethereum-hdwallet"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -69,19 +72,23 @@ func (addr CfxAddress) IsForNet(params *chaincfg.Params) bool {
 	return true
 }
 
-func GetPrivateKey(mnemonic string, password string) (string, error) {
-	seed := bip39.NewSeed(mnemonic, "") //这里可以选择传入指定密码或者空字符串，不同密码生成的助记词不同
+func GetPrivateKey(mnemonic string, password string, params *chaincfg.Params) (string, error) {
+	seed := bip39.NewSeed(mnemonic, password)
 
-	wallet, err := hdwallet.NewFromSeed(seed)
+	privKey, err := hd.NewMaster(seed, params)
 	if err != nil {
-		log.Fatal(err)
+		log.Errorf("err initializing btc priv key : %v", err)
+		return "", err
 	}
 
-	path := hdwallet.MustParseDerivationPath("m/44'/503'/0'/0/0") //最后一位是同一个助记词的地址id，从0开始，相同助记词可以生产无限个地址
-	account, err := wallet.Derive(path, false)
+	exPrivKey, err := privKey.ECPrivKey()
 	if err != nil {
-		log.Fatal(err)
+		log.Errorf("err extracting btcec priv key : %v", err)
+		return "", err
 	}
 
-	return wallet.PrivateKeyHex(account)
+	privateKeyECDSA := exPrivKey.ToECDSA()
+
+	keyString := hex.EncodeToString(crypto.FromECDSA(privateKeyECDSA))
+	return keyString, nil
 }

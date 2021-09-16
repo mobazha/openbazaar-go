@@ -161,7 +161,7 @@ type ConfluxWallet struct {
 }
 
 // NewConfluxWallet will return a reference to the Cfx Wallet
-func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string, proxy proxy.Dialer) (*ConfluxWallet, error) {
+func NewConfluxWallet(cfg mwConfig.CoinConfig, params *chaincfg.Params, mnemonic string, repoPath string, proxy proxy.Dialer) (*ConfluxWallet, error) {
 	url := "https://test.confluxrpc.com"
 
 	var networkID uint32 = 1029
@@ -175,7 +175,7 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, mnemonic string, repoPath string,
 	if err != nil {
 		log.Errorf("No account found: %s", err.Error())
 
-		privateKey, err := GetPrivateKey(mnemonic, "")
+		privateKey, err := GetPrivateKey(mnemonic, "", params)
 		if err != nil {
 			log.Errorf("get private key from mnemonic failed: %s", err.Error())
 			return nil, err
@@ -415,11 +415,18 @@ func (wallet *ConfluxWallet) MasterPublicKey() *hd.ExtendedKey {
 
 func (wallet *ConfluxWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKey bool) (*hd.ExtendedKey, error) {
 	// TODO: Add REAL CHILD KEY of public or private key for conflux
+
+	fmt.Printf("\nkeyBytes: %x, chaincode: %x\n", keyBytes, chaincode)
+
 	parentFP := []byte{0x00, 0x00, 0x00, 0x00}
 	version := []byte{0x04, 0x88, 0xad, 0xe4} // starts with xprv
 	if !isPrivateKey {
 		version = []byte{0x04, 0x88, 0xb2, 0x1e}
 	}
+	// version := []byte{0x04, 0x35, 0x83, 0x94} // starts with xprv
+	// if !isPrivateKey {
+	// 	version = []byte{0x04, 0x35, 0x87, 0xcf}
+	// }
 
 	return hd.NewExtendedKey(version, keyBytes, chaincode, parentFP, 0, 0, isPrivateKey), nil
 }
@@ -670,6 +677,7 @@ func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
 func (wallet *ConfluxWallet) getPrivateKey() *ecdsa.PrivateKey {
 	defaultAccount, _ := wallet.am.GetDefault()
 	keyString, _ := wallet.am.Export(*defaultAccount, "")
+	fmt.Printf("\nThe key string is: %v\n", keyString)
 
 	if utils.Has0xPrefix(keyString) {
 		keyString = keyString[2:]
@@ -999,6 +1007,13 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 		return "", nonce.ToInt().Uint64(), errors.New("account manager failed to unlock default address")
 	}
 
+	fmt.Printf("buyer: %v, seller: %v, moderator: %v", script.Buyer, script.Seller, script.Moderator)
+
+	buyer, _ := cfxaddress.NewFromCommon(script.Buyer, networkID)
+	seller, _ := cfxaddress.NewFromCommon(script.Seller, networkID)
+	moderator, _ := cfxaddress.NewFromCommon(script.Moderator, networkID)
+	fmt.Printf("buyer: %v, seller: %v, moderator: %v", buyer, seller, moderator)
+
 	var tx *types.UnsignedTransaction
 	var h *types.Hash
 	tx, h, err = smtct.AddTransaction(transactOpts, script.Buyer, script.Seller,
@@ -1044,7 +1059,14 @@ func (wallet *ConfluxWallet) GenerateMultisigScript(keys []hd.ExtendedKey, thres
 			return nil, nil, err
 		}
 		ePubkey := ecKey.ToECDSA()
-		ecKeys = append(ecKeys, crypto.PubkeyToAddress(*ePubkey))
+
+		addr := util.EnsureCorrectPrefix(crypto.PubkeyToAddress(*ePubkey).Hex())
+		addr = "0x1" + addr[3:]
+		commonAddr := common.HexToAddress(addr)
+
+		fmt.Printf("\nThe common addr is: %v", commonAddr)
+
+		ecKeys = append(ecKeys, commonAddr)
 	}
 
 	ver, err := wallet.registry.GetRecommendedVersion(nil, "escrow")
@@ -1186,6 +1208,7 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 
 	for _, k := range mbvAddresses {
 		v := payables[k]
+		fmt.Printf("\nThe address is: %v, amount is: %v", k, v.Int64())
 		if v.Cmp(big.NewInt(0)) != 1 {
 			continue
 		}
@@ -1231,9 +1254,13 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 
 	payload := []byte{byte(0x19), byte(0)}
 	payload = append(payload, rScript.MultisigAddress.Bytes()...)
-	payload = append(payload, destArr...)
-	payload = append(payload, amountArr...)
+	// payload = append(payload, destArr...)
+	// payload = append(payload, amountArr...)
 	payload = append(payload, shash[:]...)
+
+	networkID, _ := wallet.client.GetNetworkID()
+	multisigAddress, _ := cfxaddress.NewFromCommon(rScript.MultisigAddress, networkID)
+	fmt.Printf("multisigAddress is: %v", multisigAddress)
 
 	pHash := crypto.Keccak256(payload)
 	copy(payloadHash[:], pHash)
@@ -1410,6 +1437,14 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 	if requiredBalance.Cmp(currentBalance) > 0 {
 		// the wallet does not have the required balance
 		return nil, wi.ErrInsufficientFunds
+	}
+
+	for i := 0; i < len(vSlice); i++ {
+		fmt.Printf("\n i: %v, vSlice: %v, rSlice: %x, sSlice: %x, shash: %x, destinations: %v, amounts: %v\n", i, vSlice[i], rSlice[i], sSlice[i], shash, destinations, amounts)
+	}
+
+	for i := 0; i < len(destinations); i++ {
+		fmt.Printf("\n i: %v, destinations: %v, amounts: %v\n", i, destinations[i], amounts[i])
 	}
 
 	tx, hash, txnErr := smtct.Execute(transactOpts, vSlice, rSlice, sSlice, shash, destinations, amounts)
