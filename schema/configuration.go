@@ -33,9 +33,9 @@ type IpnsExtraConfig struct {
 type WalletsConfig struct {
 	BTC *CoinConfig `json:"BTC"`
 	BCH *CoinConfig `json:"BCH"`
-	LTC *CoinConfig `json:"LTC"`
-	ZEC *CoinConfig `json:"ZEC"`
-	ETH *CoinConfig `json:"ETH"`
+	// LTC *CoinConfig `json:"LTC"`
+	// ZEC *CoinConfig `json:"ZEC"`
+	// ETH *CoinConfig `json:"ETH"`
 	CFX *CoinConfig `json:"CFX"`
 }
 
@@ -98,39 +98,39 @@ func DefaultWalletsConfig() *WalletsConfig {
 			MaxFee:           200,
 			WalletOptions:    nil,
 		},
-		LTC: &CoinConfig{
-			Type:             WalletTypeAPI,
-			APIPool:          CoinPoolLTC,
-			APITestnetPool:   CoinPoolTLTC,
-			FeeAPI:           "", // intentionally blank
-			LowFeeDefault:    5,
-			MediumFeeDefault: 10,
-			HighFeeDefault:   20,
-			MaxFee:           200,
-			WalletOptions:    nil,
-		},
-		ZEC: &CoinConfig{
-			Type:             WalletTypeAPI,
-			APIPool:          CoinPoolZEC,
-			APITestnetPool:   CoinPoolTZEC,
-			FeeAPI:           "", // intentionally blank
-			LowFeeDefault:    5,
-			MediumFeeDefault: 10,
-			HighFeeDefault:   20,
-			MaxFee:           200,
-			WalletOptions:    nil,
-		},
-		ETH: &CoinConfig{
-			Type:             WalletTypeAPI,
-			APIPool:          CoinPoolETH,
-			APITestnetPool:   CoinPoolTETH,
-			FeeAPI:           "", // intentionally blank
-			LowFeeDefault:    7,
-			MediumFeeDefault: 15,
-			HighFeeDefault:   30,
-			MaxFee:           200,
-			WalletOptions:    EthereumDefaultOptions(),
-		},
+		// LTC: &CoinConfig{
+		// 	Type:             WalletTypeAPI,
+		// 	APIPool:          CoinPoolLTC,
+		// 	APITestnetPool:   CoinPoolTLTC,
+		// 	FeeAPI:           "", // intentionally blank
+		// 	LowFeeDefault:    5,
+		// 	MediumFeeDefault: 10,
+		// 	HighFeeDefault:   20,
+		// 	MaxFee:           200,
+		// 	WalletOptions:    nil,
+		// },
+		// ZEC: &CoinConfig{
+		// 	Type:             WalletTypeAPI,
+		// 	APIPool:          CoinPoolZEC,
+		// 	APITestnetPool:   CoinPoolTZEC,
+		// 	FeeAPI:           "", // intentionally blank
+		// 	LowFeeDefault:    5,
+		// 	MediumFeeDefault: 10,
+		// 	HighFeeDefault:   20,
+		// 	MaxFee:           200,
+		// 	WalletOptions:    nil,
+		// },
+		// ETH: &CoinConfig{
+		// 	Type:             WalletTypeAPI,
+		// 	APIPool:          CoinPoolETH,
+		// 	APITestnetPool:   CoinPoolTETH,
+		// 	FeeAPI:           "", // intentionally blank
+		// 	LowFeeDefault:    7,
+		// 	MediumFeeDefault: 15,
+		// 	HighFeeDefault:   30,
+		// 	MaxFee:           200,
+		// 	WalletOptions:    EthereumDefaultOptions(),
+		// },
 		CFX: &CoinConfig{
 			Type:             WalletTypeAPI,
 			APIPool:          CoinPoolCFX,

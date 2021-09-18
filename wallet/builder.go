@@ -83,13 +83,13 @@ func NewMultiWallet(cfg *WalletConfig) (multiwallet.MultiWallet, error) {
 			enableSPVWallet[wallet.BitcoinCash] = cfg.ConfigFile.BCH
 		}
 	}
-	if cfg.ConfigFile.ZEC != nil && cfg.ConfigFile.ZEC.Type == "API" {
-		enableAPIWallet[wallet.Zcash] = cfg.ConfigFile.ZEC
-	}
-	if cfg.ConfigFile.LTC != nil && cfg.ConfigFile.LTC.Type == "API" {
-		enableAPIWallet[wallet.Litecoin] = cfg.ConfigFile.LTC
-	}
-	enableAPIWallet[wallet.Ethereum] = cfg.ConfigFile.ETH
+	// if cfg.ConfigFile.ZEC != nil && cfg.ConfigFile.ZEC.Type == "API" {
+	// 	enableAPIWallet[wallet.Zcash] = cfg.ConfigFile.ZEC
+	// }
+	// if cfg.ConfigFile.LTC != nil && cfg.ConfigFile.LTC.Type == "API" {
+	// 	enableAPIWallet[wallet.Litecoin] = cfg.ConfigFile.LTC
+	// }
+	// enableAPIWallet[wallet.Ethereum] = cfg.ConfigFile.ETH
 	enableAPIWallet[wallet.Conflux] = cfg.ConfigFile.CFX
 
 	var newMultiwallet = make(multiwallet.MultiWallet)
@@ -306,13 +306,13 @@ func prepareAPICoinConfig(coin wallet.CoinType, override *schema.CoinConfig, wal
 		defaultConfig = defaultConfigSet.BTC
 	case wallet.BitcoinCash:
 		defaultConfig = defaultConfigSet.BCH
-	case wallet.Litecoin:
-		defaultConfig = defaultConfigSet.LTC
-	case wallet.Zcash:
-		defaultConfig = defaultConfigSet.ZEC
-	case wallet.Ethereum:
-		defaultConfig = defaultConfigSet.ETH
-		defaultCoinOptions = schema.EthereumDefaultOptions()
+	// case wallet.Litecoin:
+	// 	defaultConfig = defaultConfigSet.LTC
+	// case wallet.Zcash:
+	// 	defaultConfig = defaultConfigSet.ZEC
+	// case wallet.Ethereum:
+	// 	defaultConfig = defaultConfigSet.ETH
+	// 	defaultCoinOptions = schema.EthereumDefaultOptions()
 	case wallet.Conflux:
 		defaultConfig = defaultConfigSet.CFX
 		defaultCoinOptions = schema.ConfluxDefaultOptions()
