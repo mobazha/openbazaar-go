@@ -150,7 +150,7 @@ type ConfluxWallet struct {
 	cfg     mwConfig.CoinConfig
 	client  *CfxClient
 	am      *sdk.AccountManager
-	address *CfxAddress
+	address *cfxaddress.Address
 
 	registry *Registry
 	ppsct    *Escrow
@@ -223,7 +223,7 @@ func NewConfluxWallet(cfg mwConfig.CoinConfig, params *chaincfg.Params, mnemonic
 
 	er := NewConfluxPriceFetcher(proxy)
 
-	return &ConfluxWallet{cfg, client, am, &CfxAddress{address}, reg, nil, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
+	return &ConfluxWallet{cfg, client, am, address, reg, nil, cfg.DB, er, []func(wi.TransactionCallback){}}, nil
 }
 
 // Params - return nil to comply
@@ -251,7 +251,7 @@ func (wallet *ConfluxWallet) Transfer(to string, value *big.Int, spendAll bool, 
 
 	val := hexutil.Big(*value)
 	feeVal := hexutil.Big(fee)
-	return wallet.client.Transfer(*wallet.address.address, toAddress, &val, spendAll, &feeVal)
+	return wallet.client.Transfer(*wallet.address, toAddress, &val, spendAll, &feeVal)
 }
 
 // Start will start the wallet daemon
@@ -430,12 +430,13 @@ func (wallet *ConfluxWallet) ChildKey(keyBytes []byte, chaincode []byte, isPriva
 
 // CurrentAddress - Get the current address for the given purpose
 func (wallet *ConfluxWallet) CurrentAddress(purpose wi.KeyPurpose) btcutil.Address {
-	return *wallet.address
+	commonAddr := wallet.address.MustGetCommonAddress()
+	return EthAddress{&commonAddr}
 }
 
 // NewAddress - Returns a fresh address that has never been returned by this function
 func (wallet *ConfluxWallet) NewAddress(purpose wi.KeyPurpose) btcutil.Address {
-	return *wallet.address
+	return wallet.CurrentAddress(purpose)
 }
 
 // DecodeAddress - Parse the address string and return an address interface
@@ -474,9 +475,9 @@ func cfxScriptToAddr(addr string) (common.Address, error) {
 	return common.HexToAddress(sHash), nil
 }
 
-// ScriptToAddress - ?, not used
+// ScriptToAddress - ?
 func (wallet *ConfluxWallet) ScriptToAddress(script []byte) (btcutil.Address, error) {
-	return wallet.address, nil
+	return wallet.CurrentAddress(0), nil
 }
 
 // HasKey - Returns if the wallet has the key for the given address
@@ -599,6 +600,17 @@ func (wallet *ConfluxWallet) Transactions() ([]wi.Txn, error) {
 // GetTransaction - Get info on a specific transaction
 func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error) {
 	tx, err := wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
+	// From testing, when buy goods and the vendor node is in another country, it usually happens err is nil but tx is nil.
+	// when manually query in https://testnet.confluxscan.io/, the tx exists.
+	for i := 0; i < 10; i++ {
+		if tx != nil {
+			break
+		}
+
+		time.Sleep(1 * time.Second)
+		tx, err = wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
+	}
+
 	if err != nil {
 		return wi.Txn{}, err
 	}
@@ -614,13 +626,15 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 	v, err := wallet.registry.GetRecommendedVersion(nil, "escrow")
 	if err == nil {
 		if tx.To.String() == v.Implementation.String() {
-			toAddr = wallet.address.address
+			toAddr = wallet.address
 		}
 		if tx.Value.ToInt().Cmp(valueSub) > 0 {
 			valueSub = tx.Value.ToInt()
 		}
 	}
 
+	commonToAddr := toAddr.MustGetCommonAddress()
+	commonFromAddr := fromAddr.MustGetCommonAddress()
 	return wi.Txn{
 		Txid:        tx.Hash.String(),
 		Value:       tx.Value.ToInt().String(),
@@ -632,17 +646,17 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		FromAddress: fromAddr.String(),
 		Outputs: []wi.TransactionOutput{
 			{
-				Address: CfxAddress{toAddr},
+				Address: EthAddress{&commonToAddr},
 				Value:   *valueSub,
 				Index:   0,
 			},
 			{
-				Address: CfxAddress{&fromAddr},
+				Address: EthAddress{&commonFromAddr},
 				Value:   *valueSub,
 				Index:   1,
 			},
 			{
-				Address: CfxAddress{toAddr},
+				Address: EthAddress{&commonToAddr},
 				Value:   *valueSub,
 				Index:   2,
 			},
@@ -693,7 +707,7 @@ func (wallet *ConfluxWallet) getSpendGas(amount big.Int, addr btcutil.Address, f
 	}
 
 	val := hexutil.Big(amount)
-	gas, err := wallet.client.EstimateTxnGas(*from.address, to, &val)
+	gas, err := wallet.client.EstimateTxnGas(*from, to, &val)
 	if err != nil || gas == nil {
 		big.NewInt(0)
 	}
@@ -780,12 +794,13 @@ func (wallet *ConfluxWallet) Spend(amount big.Int, addr btcutil.Address, feeLeve
 			wallet.invokeTxnCB(h.String(), &amount)
 		}
 	}
+	commonFrom, _ := wallet.address.ToHex()
 	data, err := SerializePendingTxn(PendingTxn{
 		TxnID:     hash,
 		Amount:    amount.String(),
 		OrderID:   referenceID,
 		Nonce:     nonce,
-		From:      wallet.address.EncodeAddress(),
+		From:      commonFrom,
 		To:        actualRecipient.EncodeAddress(),
 		WithInput: false,
 	})
@@ -893,9 +908,15 @@ func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.Tr
 			return *sum
 		}
 
+		toCommon := to.(*EthAddress).address
+		networkID, _ := wallet.client.GetNetworkID()
+		toCfx, err := cfxaddress.NewFromCommon(*toCommon, networkID)
+		if err != nil {
+			return *sum
+		}
+
 		val := hexutil.Big(out.Value)
-		gas, err := wallet.client.EstimateTxnGas(*from.address,
-			*(to.(*CfxAddress).address), &val)
+		gas, err := wallet.client.EstimateTxnGas(*from, toCfx, &val)
 		if err != nil {
 			return *sum
 		}
@@ -911,16 +932,18 @@ func (wallet *ConfluxWallet) EstimateSpendFee(amount big.Int, feeLevel wi.FeeLev
 	}
 
 	val := hexutil.Big(amount)
-	return wallet.client.EstimateGasSpend(*wallet.address.address, &val)
+	return wallet.client.EstimateGasSpend(*wallet.address, &val)
 }
 
 // SweepAddress - Build and broadcast a transaction that sweeps all coins from an address. If it is a p2sh multisig, the redeemScript must be included
 func (wallet *ConfluxWallet) SweepAddress(utxos []wi.TransactionInput, address *btcutil.Address, key *hd.ExtendedKey, redeemScript *[]byte, feeLevel wi.FeeLevel) (*chainhash.Hash, error) {
 
+	addr := wallet.CurrentAddress(0)
+
 	outs := []wi.TransactionOutput{}
 	for i, in := range utxos {
 		out := wi.TransactionOutput{
-			Address: wallet.address,
+			Address: addr,
 			Value:   in.Value,
 			Index:   uint32(i),
 			OrderID: in.OrderID,
@@ -949,7 +972,7 @@ func (wallet *ConfluxWallet) ExchangeRates() wi.ExchangeRates {
 
 func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *big.Int, feeLevel wi.FeeLevel) (types.Hash, uint64, error) {
 	// call registry to get the deployed address for the escrow ct
-	fromAddress := wallet.address.address
+	fromAddress := wallet.address
 	nonce, err := wallet.client.GetNextNonce(*fromAddress, types.EpochLatestState)
 	if err != nil {
 		log.Fatal(err)
@@ -1394,7 +1417,7 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 		}
 	}
 
-	fromAddress := wallet.address.address
+	fromAddress := wallet.address
 	nonce, err := wallet.client.GetNextNonce(*fromAddress, types.EpochLatestState)
 	if err != nil {
 		log.Fatal(err)
@@ -1423,14 +1446,6 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 		return nil, wi.ErrInsufficientFunds
 	}
 
-	for i := 0; i < len(vSlice); i++ {
-		fmt.Printf("\n i: %v, vSlice: %v, rSlice: %x, sSlice: %x, shash: %x, destinations: %v, amounts: %v\n", i, vSlice[i], rSlice[i], sSlice[i], shash, destinations, amounts)
-	}
-
-	for i := 0; i < len(destinations); i++ {
-		fmt.Printf("\n i: %v, destinations: %v, amounts: %v\n", i, destinations[i], amounts[i])
-	}
-
 	err = wallet.client.AccountManager.UnlockDefault("")
 	if err != nil {
 		return nil, errors.New("account manager failed to unlock default address")
@@ -1455,12 +1470,14 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 	if err != nil {
 		log.Error(err.Error())
 	}
+
+	commonFrom, _ := wallet.address.ToHex()
 	data, err := SerializePendingTxn(PendingTxn{
 		TxnID:   *hash,
 		Amount:  "0",
 		OrderID: referenceID,
 		Nonce:   int32(nonce.ToInt().Int64()),
-		From:    wallet.address.EncodeAddress(),
+		From:    commonFrom,
 		To:      scrHash,
 	})
 	if err == nil {
