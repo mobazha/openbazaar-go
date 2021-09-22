@@ -1004,13 +1004,6 @@ func (wallet *ConfluxWallet) callAddTransaction(script CfxRedeemScript, value *b
 		return "", nonce.ToInt().Uint64(), errors.New("account manager failed to unlock default address")
 	}
 
-	fmt.Printf("buyer: %v, seller: %v, moderator: %v", script.Buyer, script.Seller, script.Moderator)
-
-	buyer, _ := cfxaddress.NewFromCommon(script.Buyer, networkID)
-	seller, _ := cfxaddress.NewFromCommon(script.Seller, networkID)
-	moderator, _ := cfxaddress.NewFromCommon(script.Moderator, networkID)
-	fmt.Printf("buyer: %v, seller: %v, moderator: %v", buyer, seller, moderator)
-
 	var tx *types.UnsignedTransaction
 	var h *types.Hash
 	tx, h, err = smtct.AddTransaction(transactOpts, script.Buyer, script.Seller,
@@ -1252,10 +1245,6 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 	// payload = append(payload, destArr...)
 	// payload = append(payload, amountArr...)
 	payload = append(payload, shash[:]...)
-
-	networkID, _ := wallet.client.GetNetworkID()
-	multisigAddress, _ := cfxaddress.NewFromCommon(rScript.MultisigAddress, networkID)
-	fmt.Printf("multisigAddress is: %v", multisigAddress)
 
 	pHash := crypto.Keccak256(payload)
 	copy(payloadHash[:], pHash)
