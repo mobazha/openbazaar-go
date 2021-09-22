@@ -415,9 +415,6 @@ func (wallet *ConfluxWallet) MasterPublicKey() *hd.ExtendedKey {
 
 func (wallet *ConfluxWallet) ChildKey(keyBytes []byte, chaincode []byte, isPrivateKey bool) (*hd.ExtendedKey, error) {
 	// TODO: Add REAL CHILD KEY of public or private key for conflux
-
-	fmt.Printf("\nkeyBytes: %x, chaincode: %x\n", keyBytes, chaincode)
-
 	parentFP := []byte{0x00, 0x00, 0x00, 0x00}
 	version := []byte{0x04, 0x88, 0xad, 0xe4} // starts with xprv
 	if !isPrivateKey {
@@ -1063,8 +1060,6 @@ func (wallet *ConfluxWallet) GenerateMultisigScript(keys []hd.ExtendedKey, thres
 		addr := util.EnsureCorrectPrefix(crypto.PubkeyToAddress(*ePubkey).Hex())
 		addr = "0x1" + addr[3:]
 		commonAddr := common.HexToAddress(addr)
-
-		fmt.Printf("\nThe common addr is: %v", commonAddr)
 
 		ecKeys = append(ecKeys, commonAddr)
 	}
