@@ -642,8 +642,8 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		Timestamp:   time.Now(),
 		WatchOnly:   false,
 		Bytes:       []byte(tx.Data),
-		ToAddress:   toAddr.String(),
-		FromAddress: fromAddr.String(),
+		ToAddress:   commonToAddr.String(),
+		FromAddress: commonFromAddr.String(),
 		Outputs: []wi.TransactionOutput{
 			{
 				Address: EthAddress{&commonToAddr},
@@ -688,8 +688,6 @@ func (wallet *ConfluxWallet) GetFeePerByte(feeLevel wi.FeeLevel) big.Int {
 func (wallet *ConfluxWallet) getPrivateKey() *ecdsa.PrivateKey {
 	defaultAccount, _ := wallet.am.GetDefault()
 	keyString, _ := wallet.am.Export(*defaultAccount, "")
-	fmt.Printf("\nThe key string is: %v\n", keyString)
-
 	if utils.Has0xPrefix(keyString) {
 		keyString = keyString[2:]
 	}
