@@ -55,6 +55,9 @@ func NewEpochWithBlockHash(blockHash Hash) *Epoch {
 
 // String implements the fmt.Stringer interface
 func (e *Epoch) String() string {
+	if e == nil {
+		return "unknown epoch"
+	}
 	if e.number != nil {
 		return e.number.String()
 	}

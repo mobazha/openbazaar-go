@@ -485,7 +485,7 @@ func (wallet *ConfluxWallet) HasKey(addr btcutil.Address) bool {
 	if !util.IsValidAddress(addr.String()) {
 		return false
 	}
-	return wallet.address.String() == addr.String()
+	return wallet.address.GetHexAddress() == addr.String()
 }
 
 // Balance - Get the confirmed and unconfirmed balances
@@ -906,7 +906,7 @@ func (wallet *ConfluxWallet) EstimateFee(ins []wi.TransactionInput, outs []wi.Tr
 			return *sum
 		}
 
-		toCommon := to.(*EthAddress).address
+		toCommon := to.(EthAddress).address
 		networkID, _ := wallet.client.GetNetworkID()
 		toCfx, err := cfxaddress.NewFromCommon(*toCommon, networkID)
 		if err != nil {
