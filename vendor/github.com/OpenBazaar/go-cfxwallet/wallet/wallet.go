@@ -485,7 +485,7 @@ func (wallet *ConfluxWallet) HasKey(addr btcutil.Address) bool {
 	if !util.IsValidAddress(addr.String()) {
 		return false
 	}
-	return wallet.address.GetHexAddress() == addr.String()
+	return strings.EqualFold(wallet.address.GetHexAddress(), addr.String())
 }
 
 // Balance - Get the confirmed and unconfirmed balances

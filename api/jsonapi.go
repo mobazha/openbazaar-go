@@ -33,6 +33,7 @@ import (
 	ggproto "gx/ipfs/QmddjPSGZb3ieihSseFeCfVRpZzcqczPNsD2DvarSwnjJB/gogo-protobuf/proto"
 	mh "gx/ipfs/QmerPMzPk1mJVowm8KgmoknWa4yCYvvugMPsgWmDNUvDLW/go-multihash"
 
+	"github.com/Conflux-Chain/go-conflux-sdk/types/cfxaddress"
 	"github.com/OpenBazaar/jsonpb"
 	"github.com/OpenBazaar/openbazaar-go/core"
 	"github.com/OpenBazaar/openbazaar-go/ipfs"
@@ -702,12 +703,29 @@ func (i *jsonAPIHandler) GETWalletCurrencyDictionary(w http.ResponseWriter, r *h
 	SanitizedResponse(w, string(out))
 }
 
+func convertCommonAddressToCfxAddress(address string, testnet bool) string {
+	// var networkID uint32 = 1029
+	// if testnet {
+	// 	networkID = 1
+	// }
+	var networkID uint32 = 1
+	addr, err := cfxaddress.NewFromHex(address, networkID)
+	if err != nil {
+		return address
+	}
+	return addr.String()
+}
+
 func (i *jsonAPIHandler) GETAddress(w http.ResponseWriter, r *http.Request) {
 	_, coinType := path.Split(r.URL.Path)
 	if coinType == "address" {
 		ret := make(map[string]interface{})
 		for ct, wal := range i.node.Multiwallet {
-			ret[ct.CurrencyCode()] = wal.CurrentAddress(wallet.EXTERNAL).String()
+			addr := wal.CurrentAddress(wallet.EXTERNAL).String()
+			if ct == wallet.Conflux || ct == wallet.TestnetConflux {
+				addr = convertCommonAddressToCfxAddress(addr, ct == wallet.TestnetConflux)
+			}
+			ret[ct.CurrencyCode()] = addr
 		}
 		out, err := json.MarshalIndent(ret, "", "    ")
 		if err != nil {
@@ -722,8 +740,12 @@ func (i *jsonAPIHandler) GETAddress(w http.ResponseWriter, r *http.Request) {
 		ErrorResponse(w, http.StatusBadRequest, "Unknown wallet type")
 		return
 	}
-	addr := wal.CurrentAddress(wallet.EXTERNAL)
-	SanitizedResponse(w, fmt.Sprintf(`{"address": "%s"}`, addr.String()))
+	addr := wal.CurrentAddress(wallet.EXTERNAL).String()
+	if strings.EqualFold(coinType, "CFX") || strings.EqualFold(coinType, "TCFX") {
+		addr = convertCommonAddressToCfxAddress(addr, strings.EqualFold(coinType, "TCFX"))
+	}
+
+	SanitizedResponse(w, fmt.Sprintf(`{"address": "%s"}`, addr))
 }
 
 func (i *jsonAPIHandler) GETMnemonic(w http.ResponseWriter, r *http.Request) {
