@@ -1509,11 +1509,27 @@ func (wallet *ConfluxWallet) ReSyncBlockchain(fromTime time.Time) {
 // GetConfirmations - Return the number of confirmations and the height for a transaction
 func (wallet *ConfluxWallet) GetConfirmations(txid chainhash.Hash) (confirms, atHeight uint32, err error) {
 	tx, err := wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
+	// TIME SEQ: From testing, when buy goods and the vendor node is in another country, it usually happens err is nil but tx is nil.
+	// when manually query in https://testnet.confluxscan.io/, the tx exists.
+	for i := 0; i < 10; i++ {
+		if tx != nil {
+			break
+		}
+
+		time.Sleep(1 * time.Second)
+		tx, err = wallet.client.GetTransactionByHash(types.Hash(util.EnsureCorrectPrefix(txid.String())))
+	}
 	if err != nil {
 		return 0, 0, err
 	}
+	if tx == nil {
+		return 0, 0, fmt.Errorf("cannot find transaction for txid: %v", txid.String())
+	}
 
 	highestEpoch, err := wallet.client.GetEpochNumber()
+	if err != nil {
+		return 0, 0, err
+	}
 
 	ucfs := big.NewInt(0)
 	ucfs.Sub(highestEpoch.ToInt(), tx.EpochHeight.ToInt())
