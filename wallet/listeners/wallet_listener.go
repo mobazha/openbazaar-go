@@ -2,7 +2,6 @@ package bitcoin
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/OpenBazaar/openbazaar-go/repo"
 	"github.com/OpenBazaar/wallet-interface"
@@ -22,16 +21,6 @@ func NewWalletListener(db repo.Datastore, broadcast chan repo.Notifier, coinType
 func (l *WalletListener) OnTransactionReceived(cb wallet.TransactionCallback) {
 	if !cb.WatchOnly {
 		metadata, err := l.db.TxMetadata().Get(cb.Txid)
-		// TIME SEQ: wait a few seconds for TL.OnTransactionReceived to be processed first
-		for i := 0; i < 20; i++ {
-			if err == nil {
-				break
-			}
-
-			time.Sleep(300 * time.Millisecond)
-			metadata, err = l.db.TxMetadata().Get(cb.Txid)
-		}
-
 		if err != nil {
 			log.Debugf("tx metadata not found for id (%s): %s", cb.Txid, err.Error())
 		}

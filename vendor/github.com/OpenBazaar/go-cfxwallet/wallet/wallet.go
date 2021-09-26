@@ -12,6 +12,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"cfxabigen/bind"
@@ -538,56 +539,174 @@ func (wallet *ConfluxWallet) equalsCfxAddress(addr1 string, addr2 string) bool {
 	return cfxAddress1.Equals(&cfxAddress2)
 }
 
-// TransactionsFromEpoch - Returns a list of transactions for this wallet begining from the specified epoch
-func (wallet *ConfluxWallet) TransactionsFromEpoch(startBlock *int) ([]wi.Txn, error) {
+func (wallet *ConfluxWallet) getUpdatedNonInternalTxRecord(t TxRecord, currentTip uint32) *wi.Txn {
+	val := t.Value
+	if val == "0" { // Non internal Transaction
+		return nil
+	}
+
+	status := wi.StatusConfirmed
+	if t.Status == 1 {
+		status = wi.StatusError
+	}
+
+	prefix := ""
+	if wallet.equalsCfxAddress(t.From, wallet.address.String()) {
+		prefix = "-"
+	}
+
+	val = prefix + val
+
+	tnew := wi.Txn{
+		Txid:          util.EnsureCorrectPrefix(t.Hash),
+		Value:         val,
+		Height:        int32(t.EpochNumber),
+		Timestamp:     time.Unix(t.Timestamp, 0),
+		WatchOnly:     false,
+		Confirmations: int64(currentTip - t.EpochNumber),
+		Status:        wi.StatusCode(status),
+		Bytes:         []byte{},
+		FromAddress:   t.From,
+		ToAddress:     t.To,
+	}
+	return &tnew
+}
+
+func (wallet *ConfluxWallet) getUpdatedInternalTxRecord(t TxRecord, currentTip uint32) *wi.Txn {
+	if t.Value != "0" { // Internal Transaction only
+		return nil
+	}
+
+	status := wi.StatusConfirmed
+	if t.Status == 1 {
+		status = wi.StatusError
+	}
+
+	txTree, err := wallet.client.scaner.getInternalTxRecords(t.Hash)
+	if err != nil {
+		log.Errorf("Transaction Errored: %v\n", err)
+		return nil
+	}
+
+	intVal, _ := new(big.Int).SetString("0", 10)
+
+	from := txTree.Action.To // the contract address
+	to := wallet.address.String()
+
+	found := false
+	for _, v := range txTree.Calls {
+		action := v.Action
+		if wallet.equalsCfxAddress(action.To, to) {
+			found = true
+			fmt.Printf("\naction.From: %v, action.To: %v, action.Value: %v\n", action.From, action.To, action.Value)
+
+			tmpVal, _ := new(big.Int).SetString(action.Value, 10)
+			intVal = new(big.Int).Add(intVal, tmpVal)
+		}
+	}
+	if !found {
+		return nil
+	}
+
+	tnew := wi.Txn{
+		Txid:          util.EnsureCorrectPrefix(t.Hash),
+		Value:         intVal.String(),
+		Height:        int32(t.EpochNumber),
+		Timestamp:     time.Unix(t.Timestamp, 0),
+		WatchOnly:     false,
+		Confirmations: int64(currentTip - t.EpochNumber),
+		Status:        wi.StatusCode(status),
+		Bytes:         []byte{},
+		FromAddress:   from,
+		ToAddress:     to,
+	}
+	return &tnew
+}
+
+func (wallet *ConfluxWallet) getEscrowAddress() (string, error) {
+	v, err := wallet.registry.GetRecommendedVersion(nil, "escrow")
+	if err == nil {
+		return v.Implementation.String(), nil
+	}
+	return "", err
+}
+
+func (wallet *ConfluxWallet) getTransactionsFromEpoch(startEpoch *uint32, nonInternal bool) ([]wi.Txn, error) {
 	ret := []wi.Txn{}
 
-	unconf, _ := wallet.db.Txns().GetAll(false)
+	var txns []TxRecord
+	var err error
+	if nonInternal {
+		txns, err = wallet.client.scaner.getTxRecords(wallet.address.String(), startEpoch, startEpoch, 0, 50)
+	} else {
+		// For vendor and moderator, it may not be able to get transactions from conflux scan,
+		// when it is internal transaction. Do it explicitly by using the escrow address
+		escrowAddr, err1 := wallet.getEscrowAddress()
+		if err1 != nil {
+			return []wi.Txn{}, err
+		}
+		txns, err = wallet.client.scaner.getTxRecords(escrowAddr, startEpoch, startEpoch, 0, 50)
+	}
 
-	txns, err := wallet.client.scaner.getTxRecords(wallet.address.String(), 0, 50)
-	if err != nil && len(unconf) == 0 {
+	if err != nil {
 		log.Error("err fetching transactions : ", err)
-		return []wi.Txn{}, nil
+		return []wi.Txn{}, err
 	}
 
 	currentTip, _ := wallet.ChainTip()
 	if currentTip == 0 {
 		log.Error("err failed to get ChainTip")
-		return []wi.Txn{}, nil
+		return []wi.Txn{}, fmt.Errorf("err failed to get ChainTip")
 	}
+
+	wg := &sync.WaitGroup{}
 	for i := len(txns) - 1; i >= 0; i-- {
+		wg.Add(1)
+
 		t := txns[i]
-		status := wi.StatusConfirmed
-		prefix := ""
-		if t.Status == 1 {
-			status = wi.StatusError
-		}
+		go func() {
+			defer wg.Done()
 
-		if wallet.equalsCfxAddress(t.From, wallet.address.String()) {
-			prefix = "-"
-		}
+			var tnew *wi.Txn
+			if nonInternal {
+				tnew = wallet.getUpdatedNonInternalTxRecord(t, currentTip)
+			} else {
+				tnew = wallet.getUpdatedInternalTxRecord(t, currentTip)
+			}
 
-		val := t.Value
+			if tnew != nil {
+				ret = append(ret, *tnew)
+			}
+		}()
+	}
+	wg.Wait()
 
-		val = prefix + val
+	return ret, nil
+}
 
-		tnew := wi.Txn{
-			Txid:          util.EnsureCorrectPrefix(t.Hash),
-			Value:         val,
-			Height:        int32(t.EpochNumber),
-			Timestamp:     time.Unix(t.Timestamp, 0),
-			WatchOnly:     false,
-			Confirmations: int64(currentTip - t.EpochNumber),
-			Status:        wi.StatusCode(status),
-			Bytes:         []byte{},
-		}
-		ret = append(ret, tnew)
+// TransactionsFromEpoch - Returns a list of transactions for this wallet begining from the specified epoch
+func (wallet *ConfluxWallet) TransactionsFromEpoch(startEpoch *uint32) ([]wi.Txn, error) {
+	ret := []wi.Txn{}
+
+	nonInternalTxns, err := wallet.getTransactionsFromEpoch(startEpoch, true)
+	if err == nil {
+		ret = append(ret, nonInternalTxns...)
 	}
 
+	internalTxns, err := wallet.getTransactionsFromEpoch(startEpoch, false)
+	if err == nil {
+		ret = append(ret, internalTxns...)
+	}
+
+	unconf, _ := wallet.db.Txns().GetAll(false)
 	for _, u := range unconf {
 		u.Status = wi.StatusUnconfirmed
 		ret = append(ret, u)
 	}
+
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].Timestamp.Before(ret[j].Timestamp)
+	})
 
 	return ret, nil
 }
