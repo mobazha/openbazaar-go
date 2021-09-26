@@ -329,10 +329,9 @@ func (wallet *ConfluxWallet) Start() {
 
 func (wallet *ConfluxWallet) processBalanceChange(previousBalance, currentBalance *big.Int, currentHead uint32) {
 	count := 0
-	cTip := int(currentHead)
 	value := new(big.Int).Sub(currentBalance, previousBalance)
 	for count < 30 {
-		txns, err := wallet.TransactionsFromEpoch(&cTip)
+		txns, err := wallet.TransactionsFromEpoch(&currentHead)
 		if err == nil && len(txns) > 0 {
 			count = 30
 			txncb := wi.TransactionCallback{
