@@ -438,6 +438,28 @@ func (l *TransactionListener) processPurchasePayment(txid string, output wallet.
 		if err != nil {
 			log.Error(err)
 		}
+
+		// Save tx metadata
+		var thumbnail string
+		var title string
+		if contract.VendorListings[0].Item != nil && len(contract.VendorListings[0].Item.Images) > 0 {
+			thumbnail = contract.VendorListings[0].Item.Images[0].Tiny
+			title = contract.VendorListings[0].Item.Title
+		}
+		bumpable := false
+		if contract.BuyerOrder.Payment.Method != pb.Order_Payment_MODERATED {
+			bumpable = true
+		}
+		if err := l.db.TxMetadata().Put(repo.Metadata{
+			Txid:       txid,
+			Address:    "",
+			Memo:       title,
+			OrderId:    orderId,
+			Thumbnail:  thumbnail,
+			CanBumpFee: bumpable,
+		}); err != nil {
+			log.Errorf("failed updating tx metadata (%s): %s", txid, err.Error())
+		}
 	}
 }
 

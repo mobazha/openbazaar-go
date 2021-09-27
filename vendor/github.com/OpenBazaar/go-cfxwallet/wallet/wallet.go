@@ -737,22 +737,51 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		return wi.Txn{}, errors.New("tx is nil!!!, txid: " + txid.String())
 	}
 
-	fromAddr := tx.From
-	toAddr := tx.To
-	valueSub := big.NewInt(5000000)
+	commonFromAddr := tx.From.MustGetCommonAddress()
+	commonToAddr := tx.To.MustGetCommonAddress()
 
-	v, err := wallet.registry.GetRecommendedVersion(nil, "escrow")
-	if err == nil {
-		if tx.To.String() == v.Implementation.String() {
-			toAddr = wallet.address
-		}
-		if tx.Value.ToInt().Cmp(valueSub) > 0 {
-			valueSub = tx.Value.ToInt()
+	if tx.Value.ToInt().String() != "0" {
+		return wi.Txn{
+			Txid:        tx.Hash.String(),
+			Value:       tx.Value.ToInt().String(),
+			Height:      0,
+			Timestamp:   time.Now(),
+			WatchOnly:   false,
+			Bytes:       []byte(tx.Data),
+			ToAddress:   commonToAddr.String(),
+			FromAddress: commonFromAddr.String(),
+			Outputs: []wi.TransactionOutput{
+				{
+					Address: EthAddress{&commonToAddr},
+					Value:   *tx.Value.ToInt(),
+					Index:   0,
+				},
+			},
+		}, nil
+	}
+
+	txTree, err := wallet.client.scaner.getInternalTxRecords(util.EnsureCorrectPrefix(txid.String()))
+	if err != nil {
+		log.Errorf("Transaction Errored: %v\n", err)
+		return wi.Txn{}, err
+	}
+
+	var outputs []wi.TransactionOutput
+	var idx uint32 = 0
+	for _, v := range txTree.Calls {
+		action := v.Action
+		if action.Value != "0" {
+			tmpVal, _ := new(big.Int).SetString(action.Value, 10)
+			commonToAddr := common.HexToAddress(action.To)
+			outputs = append(outputs, wi.TransactionOutput{
+				Address: EthAddress{&commonToAddr},
+				Value:   *tmpVal,
+				Index:   idx,
+			})
+			idx += 1
 		}
 	}
 
-	commonToAddr := toAddr.MustGetCommonAddress()
-	commonFromAddr := fromAddr.MustGetCommonAddress()
 	return wi.Txn{
 		Txid:        tx.Hash.String(),
 		Value:       tx.Value.ToInt().String(),
@@ -762,23 +791,7 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 		Bytes:       []byte(tx.Data),
 		ToAddress:   commonToAddr.String(),
 		FromAddress: commonFromAddr.String(),
-		Outputs: []wi.TransactionOutput{
-			{
-				Address: EthAddress{&commonToAddr},
-				Value:   *valueSub,
-				Index:   0,
-			},
-			{
-				Address: EthAddress{&commonFromAddr},
-				Value:   *valueSub,
-				Index:   1,
-			},
-			{
-				Address: EthAddress{&commonToAddr},
-				Value:   *valueSub,
-				Index:   2,
-			},
-		},
+		Outputs:     outputs,
 	}, nil
 }
 

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	libp2p "gx/ipfs/QmTW4SdgBWq9GjsBsHeUx8WuGxzhgzAf88UMH2w62PC8yK/go-libp2p-crypto"
-	"gx/ipfs/QmYVXrKrKHDC9FobgmcmshCDyWwdrfwfanNQN4oxJ9Fk3h/go-libp2p-peer"
+	peer "gx/ipfs/QmYVXrKrKHDC9FobgmcmshCDyWwdrfwfanNQN4oxJ9Fk3h/go-libp2p-peer"
 
 	"github.com/OpenBazaar/wallet-interface"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -1256,10 +1256,10 @@ func (n *OpenBazaarNode) ReleaseFunds(contract *pb.RicardianContract, records []
 
 	// Update database
 	if n.IpfsNode.Identity.Pretty() == order.BuyerID.PeerID {
-		err = n.Datastore.Purchases().Put(orderID, *contract, pb.OrderState_DECIDED, true)
+		err = n.Datastore.Purchases().Put(orderID, *contract, pb.OrderState_RESOLVED, false)
 		peerID = contract.VendorListings[0].VendorID.PeerID
 	} else {
-		err = n.Datastore.Sales().Put(orderID, *contract, pb.OrderState_DECIDED, true)
+		err = n.Datastore.Sales().Put(orderID, *contract, pb.OrderState_RESOLVED, false)
 	}
 	if err != nil {
 		log.Errorf("ReleaseFunds error updating database: %s", err.Error())
