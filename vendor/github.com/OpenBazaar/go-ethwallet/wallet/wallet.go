@@ -1273,7 +1273,6 @@ func (wallet *EthereumWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tra
 			indx = append(indx, i)
 		}
 		if out.Address.String() == rScript.Moderator.Hex() {
-			indx = append(indx, i)
 			mbvAddresses[0] = out.Address.String()
 		} else if out.Address.String() == rScript.Buyer.Hex() {
 			mbvAddresses[1] = out.Address.String()

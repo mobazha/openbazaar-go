@@ -334,10 +334,27 @@ func (wallet *ConfluxWallet) processBalanceChange(previousBalance, currentBalanc
 		txns, err := wallet.TransactionsFromEpoch(&currentHead)
 		if err == nil && len(txns) > 0 {
 			count = 30
+
+			var outputs []wi.TransactionOutput
+			var inputs []wi.TransactionInput
+			for _, txn := range txns {
+				inputLinkedAddr, _ := wallet.DecodeAddress(txn.FromAddress)
+				inputTx := wi.TransactionInput{
+					LinkedAddress: inputLinkedAddr,
+				}
+				inputs = append(inputs, inputTx)
+
+				outputLinkedAddr, _ := wallet.DecodeAddress(txn.ToAddress)
+				outputTx := wi.TransactionOutput{
+					Address: outputLinkedAddr,
+				}
+				outputs = append(outputs, outputTx)
+			}
+
 			txncb := wi.TransactionCallback{
 				Txid:      util.EnsureCorrectPrefix(txns[0].Txid),
-				Outputs:   []wi.TransactionOutput{},
-				Inputs:    []wi.TransactionInput{},
+				Outputs:   outputs,
+				Inputs:    inputs,
 				Height:    txns[0].Height,
 				Timestamp: time.Now(),
 				Value:     *value,
@@ -597,7 +614,6 @@ func (wallet *ConfluxWallet) getUpdatedInternalTxRecord(t TxRecord, currentTip u
 		action := v.Action
 		if wallet.equalsCfxAddress(action.To, to) {
 			found = true
-			fmt.Printf("\naction.From: %v, action.To: %v, action.Value: %v\n", action.From, action.To, action.Value)
 
 			tmpVal, _ := new(big.Int).SetString(action.Value, 10)
 			intVal = new(big.Int).Add(intVal, tmpVal)
@@ -799,7 +815,7 @@ func (wallet *ConfluxWallet) GetTransaction(txid chainhash.Hash) (wi.Txn, error)
 func (wallet *ConfluxWallet) ChainTip() (uint32, chainhash.Hash) {
 	status, err := wallet.client.GetStatus()
 	if err != nil {
-		fmt.Printf("- get status error: %v\n\n", err.Error())
+		log.Errorf("- get status error: %v\n\n", err.Error())
 		return 0, *emptyChainHash
 	}
 
@@ -1348,7 +1364,6 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 
 	for _, k := range mbvAddresses {
 		v := payables[k]
-		fmt.Printf("\nThe address is: %v, amount is: %v", k, v.Int64())
 		if v.Cmp(big.NewInt(0)) != 1 {
 			continue
 		}
@@ -1394,8 +1409,8 @@ func (wallet *ConfluxWallet) CreateMultisigSignature(ins []wi.TransactionInput, 
 
 	payload := []byte{byte(0x19), byte(0)}
 	payload = append(payload, rScript.MultisigAddress.Bytes()...)
-	// payload = append(payload, destArr...)
-	// payload = append(payload, amountArr...)
+	payload = append(payload, destArr...)
+	payload = append(payload, amountArr...)
 	payload = append(payload, shash[:]...)
 
 	pHash := crypto.Keccak256(payload)
@@ -1453,7 +1468,6 @@ func (wallet *ConfluxWallet) Multisign(ins []wi.TransactionInput, outs []wi.Tran
 			indx = append(indx, i)
 		}
 		if out.Address.String() == rScript.Moderator.Hex() {
-			indx = append(indx, i)
 			mbvAddresses[0] = out.Address.String()
 		} else if out.Address.String() == rScript.Buyer.Hex() {
 			mbvAddresses[1] = out.Address.String()

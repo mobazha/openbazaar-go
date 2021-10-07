@@ -686,7 +686,13 @@ func (n *OpenBazaarNode) CloseDispute(orderID string, buyerPercentage, vendorPer
 
 	// Subtract fee from each output in proportion to output value
 	var outs []wallet.TransactionOutput
-	for role, output := range outMap {
+	// fengzie: Keep the output in sequence
+	for _, role := range []string{"buyer", "vendor", "moderator"} {
+		output, ok := outMap[role]
+		if !ok {
+			continue
+		}
+
 		outPercentage := new(big.Float).Quo(new(big.Float).SetInt(&output.Value), new(big.Float).SetInt(totalOut))
 		outputShareOfFee := new(big.Float).Mul(outPercentage, new(big.Float).SetInt(&txFee))
 		valF := new(big.Float).Sub(new(big.Float).SetInt(&output.Value), outputShareOfFee)
