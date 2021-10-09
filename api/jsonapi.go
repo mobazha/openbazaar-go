@@ -748,6 +748,17 @@ func (i *jsonAPIHandler) GETAddress(w http.ResponseWriter, r *http.Request) {
 	SanitizedResponse(w, fmt.Sprintf(`{"address": "%s"}`, addr))
 }
 
+func (i *jsonAPIHandler) GETUpdateAddress(w http.ResponseWriter, r *http.Request) {
+	_, coinType := path.Split(r.URL.Path)
+	addr := r.URL.Query().Get("address")
+
+	if strings.EqualFold(coinType, "CFX") {
+		addr = convertCommonAddressToCfxAddress(addr, true)
+	}
+
+	SanitizedResponse(w, fmt.Sprintf(`{"address": "%s"}`, addr))
+}
+
 func (i *jsonAPIHandler) GETMnemonic(w http.ResponseWriter, r *http.Request) {
 	mn, err := i.node.Datastore.Config().GetMnemonic()
 	if err != nil {
