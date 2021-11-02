@@ -50,9 +50,9 @@ const (
 	ConfluxRegistryAddressMainnet = "0x5c69ccf91eab4ef80d9929b3c1b4d5bc03eb0981"
 	ConfluxRegistryAddressTestnet = "cfxtest:aca77f0cck29xd6ur0z4tsvnxe4v4w1fhyxd99p1p3"
 
-	// DataPushNodeOne   = "QmbwN82MVyBukT7WTdaQDppaACo62oUfma8dUa5R9nBFHm"
-	// DataPushNodeTwo   = "QmPPg2qeF3n2KvTRXRZLaTwHCw8JxzF4uZK93RfMoDvf2o"
-	// DataPushNodeThree = "QmY8puEnVx66uEet64gAf4VZRo7oUyMCwG6KdB9KM92EGQ"
+	DataPushNodeOne   = "QmRzvAHgRYbeJfHrjX4mHkgLVEZppMVuJGz7i54JNn4gdv"
+	DataPushNodeTwo   = "QmXRhnoH2wSULvqksitn7GpkZwnnTG5tR8Rm7MqiWw62VY"
+	DataPushNodeThree = "Qmc9r4tcmKvNzdbXSTBv2kFi7qQi93eUFoRX2ZsJ2bxvz2"
 	DataPushNodeFour  = "QmV2B7fcVR6o8ZKs7D8vexhhQjjKZtofJzoFsx44X2ioEE"
 	DataPushNodeFive  = "QmSqRoRDqGWd9VLQVAWHqLmBH6RW93CPY7vdqXCZELCt52"
 	DataPushNodeSix   = "QmNPNz8nrpy5CfJiof7sv9XbPBvpxe3myP3HKcMF3WGofo"
@@ -63,10 +63,13 @@ const (
 	// BootstrapNodeDefault_LeMarcheSerpette = "/ip4/107.170.133.32/tcp/4001/ipfs/QmUZRGLhcKXF1JyuaHgKm23LvqcoMYwtb9jmh8CkP4og3K"
 	// BootstrapNodeDefault_BrixtonVillage   = "/ip4/139.59.174.197/tcp/4001/ipfs/QmZfTbnpvPwxCjpCG3CXJ7pfexgkBZ2kgChAiRJrTK1HsM"
 	// BootstrapNodeDefault_Johari           = "/ip4/139.59.6.222/tcp/4001/ipfs/QmRDcEDK9gSViAevCHiE6ghkaBCU7rTuQj4BDpmCzRvRYg"
-	BootstrapNodeDefault_Singapore = "/ip4/45.76.183.141/tcp/4001/ipfs/QmV2B7fcVR6o8ZKs7D8vexhhQjjKZtofJzoFsx44X2ioEE"
-	BootstrapNodeDefault_Dallas    = "/ip4/137.220.50.87/tcp/4001/ipfs/QmSqRoRDqGWd9VLQVAWHqLmBH6RW93CPY7vdqXCZELCt52"
-	BootstrapNodeDefault_GuangZhou = "/ip4/139.9.196.33/tcp/4001/ipfs/QmNPNz8nrpy5CfJiof7sv9XbPBvpxe3myP3HKcMF3WGofo"
-	BootstrapNodeDefault_Shanghai  = "/ip4/101.34.13.199/tcp/4001/ipfs/QmPeyynV8haCtFFfVhFRCiZopBU5EqET3opW6P8JwhSD5t"
+	BootstrapNodeDefault_Hangzhou   = "/ip4/115.220.5.230/tcp/4001/ipfs/QmRzvAHgRYbeJfHrjX4mHkgLVEZppMVuJGz7i54JNn4gdv"
+	BootstrapNodeDefault_Guangzhou0 = "/ip4/119.91.144.222/tcp/4001/ipfs/QmXRhnoH2wSULvqksitn7GpkZwnnTG5tR8Rm7MqiWw62VY"
+	BootstrapNodeDefault_Singapore  = "/ip4/45.76.183.141/tcp/4001/ipfs/QmV2B7fcVR6o8ZKs7D8vexhhQjjKZtofJzoFsx44X2ioEE"
+	BootstrapNodeDefault_Dallas     = "/ip4/137.220.50.87/tcp/4001/ipfs/QmSqRoRDqGWd9VLQVAWHqLmBH6RW93CPY7vdqXCZELCt52"
+	BootstrapNodeDefault_GuangZhou  = "/ip4/139.9.196.33/tcp/4001/ipfs/QmNPNz8nrpy5CfJiof7sv9XbPBvpxe3myP3HKcMF3WGofo"
+	BootstrapNodeDefault_Shanghai   = "/ip4/101.34.13.199/tcp/4001/ipfs/QmPeyynV8haCtFFfVhFRCiZopBU5EqET3opW6P8JwhSD5t"
+	BootstrapNodeDefault_Guizhou    = "/ip4/140.246.224.238 /tcp/4001/ipfs/Qmc9r4tcmKvNzdbXSTBv2kFi7qQi93eUFoRX2ZsJ2bxvz2"
 
 	IPFSCachingRouterDefaultURI = "https://routing.api.openbazaar.org"
 	// End Configuration defaults
@@ -79,16 +82,19 @@ var (
 )
 
 var (
-	DataPushNodes = []string{DataPushNodeFour, DataPushNodeFive, DataPushNodeSix, DataPushNodeSeven}
+	DataPushNodes = []string{DataPushNodeOne, DataPushNodeTwo, DataPushNodeThree, DataPushNodeFour, DataPushNodeFive, DataPushNodeSix, DataPushNodeSeven}
 
 	BootstrapAddressesDefault = []string{
 		// BootstrapNodeDefault_LeMarcheSerpette,
 		// BootstrapNodeDefault_BrixtonVillage,
 		// BootstrapNodeDefault_Johari,
+		BootstrapNodeDefault_Hangzhou,
+		BootstrapNodeDefault_Guangzhou0,
 		BootstrapNodeDefault_Singapore,
 		BootstrapNodeDefault_Dallas,
 		BootstrapNodeDefault_GuangZhou,
 		BootstrapNodeDefault_Shanghai,
+		BootstrapNodeDefault_Guizhou,
 	}
 	BootstrapAddressesTestnet = []string{
 		// BootstrapNodeTestnet_BrooklynFlea,
