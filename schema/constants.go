@@ -57,6 +57,7 @@ const (
 	DataPushNodeFive  = "QmSqRoRDqGWd9VLQVAWHqLmBH6RW93CPY7vdqXCZELCt52"
 	DataPushNodeSix   = "QmNPNz8nrpy5CfJiof7sv9XbPBvpxe3myP3HKcMF3WGofo"
 	DataPushNodeSeven = "QmPeyynV8haCtFFfVhFRCiZopBU5EqET3opW6P8JwhSD5t"
+	DataPushNodeEight = "QmWQRu1bkmKSMcr7FuaKc1q5sSqzixnQtJXPS5HcicRbnj"
 
 	// BootstrapNodeTestnet_BrooklynFlea     = "/ip4/165.227.117.91/tcp/4001/ipfs/Qmaa6De5QYNqShzPb9SGSo8vLmoUte8mnWgzn4GYwzuUYA"
 	// BootstrapNodeTestnet_Shipshewana      = "/ip4/46.101.221.165/tcp/4001/ipfs/QmVAQYg7ygAWTWegs8HSV2kdW1MqW8WMrmpqKG1PQtkgTC"
@@ -69,7 +70,8 @@ const (
 	BootstrapNodeDefault_Dallas     = "/ip4/137.220.50.87/tcp/4001/ipfs/QmSqRoRDqGWd9VLQVAWHqLmBH6RW93CPY7vdqXCZELCt52"
 	BootstrapNodeDefault_GuangZhou  = "/ip4/139.9.196.33/tcp/4001/ipfs/QmNPNz8nrpy5CfJiof7sv9XbPBvpxe3myP3HKcMF3WGofo"
 	BootstrapNodeDefault_Shanghai   = "/ip4/101.34.13.199/tcp/4001/ipfs/QmPeyynV8haCtFFfVhFRCiZopBU5EqET3opW6P8JwhSD5t"
-	BootstrapNodeDefault_Guizhou    = "/ip4/140.246.224.238 /tcp/4001/ipfs/Qmc9r4tcmKvNzdbXSTBv2kFi7qQi93eUFoRX2ZsJ2bxvz2"
+	BootstrapNodeDefault_Guizhou    = "/ip4/140.246.224.238/tcp/4001/ipfs/Qmc9r4tcmKvNzdbXSTBv2kFi7qQi93eUFoRX2ZsJ2bxvz2"
+	BootstrapNodeDefault_Chengdu    = "/ip4/139.155.239.158/tcp/4001/ipfs/QmWQRu1bkmKSMcr7FuaKc1q5sSqzixnQtJXPS5HcicRbnj"
 
 	IPFSCachingRouterDefaultURI = "https://routing.api.openbazaar.org"
 	// End Configuration defaults
@@ -82,7 +84,7 @@ var (
 )
 
 var (
-	DataPushNodes = []string{DataPushNodeOne, DataPushNodeTwo, DataPushNodeThree, DataPushNodeFour, DataPushNodeFive, DataPushNodeSix, DataPushNodeSeven}
+	DataPushNodes = []string{DataPushNodeOne, DataPushNodeTwo, DataPushNodeThree, DataPushNodeFour, DataPushNodeFive, DataPushNodeSix, DataPushNodeSeven, DataPushNodeEight}
 
 	BootstrapAddressesDefault = []string{
 		// BootstrapNodeDefault_LeMarcheSerpette,
@@ -95,6 +97,7 @@ var (
 		BootstrapNodeDefault_GuangZhou,
 		BootstrapNodeDefault_Shanghai,
 		BootstrapNodeDefault_Guizhou,
+		BootstrapNodeDefault_Chengdu,
 	}
 	BootstrapAddressesTestnet = []string{
 		// BootstrapNodeTestnet_BrooklynFlea,
