@@ -52,7 +52,7 @@ func NewConfluxPriceFetcher(dialer proxy.Dialer) *ConfluxPriceFetcher {
 	client := &http.Client{Transport: tbTransport, Timeout: time.Minute}
 
 	z.providers = []*ExchangeRateProvider{
-		{"https://market.mobazha.com/api/ticker", z.cache, client, MobazhaDecoder{}, bp},
+		{"https://mobazha.info/api/ticker", z.cache, client, MobazhaDecoder{}, bp},
 	}
 	go z.run()
 	return &z

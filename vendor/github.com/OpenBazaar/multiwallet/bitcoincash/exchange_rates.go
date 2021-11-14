@@ -46,7 +46,7 @@ func NewBitcoinCashPriceFetcher(dialer proxy.Dialer) *BitcoinCashPriceFetcher {
 	}
 
 	b.providers = []*ExchangeRateProvider{
-		{"https://market.mobazha.com/api/ticker", b.cache, client, OpenBazaarDecoder{}},
+		{"https://mobazha.info/api/ticker", b.cache, client, OpenBazaarDecoder{}},
 	}
 	return &b
 }

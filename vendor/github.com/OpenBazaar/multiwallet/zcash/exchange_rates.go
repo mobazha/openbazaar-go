@@ -54,7 +54,7 @@ func NewZcashPriceFetcher(dialer proxy.Dialer) *ZcashPriceFetcher {
 	}
 
 	z.providers = []*ExchangeRateProvider{
-		{"https://market.mobazha.com/api/ticker", z.cache, client, OpenBazaarDecoder{}, nil},
+		{"https://mobazha.info/api/ticker", z.cache, client, OpenBazaarDecoder{}, nil},
 		{"https://bittrex.com/api/v1.1/public/getticker?market=btc-zec", z.cache, client, BittrexDecoder{}, bp},
 		{"https://api.bitfinex.com/v1/pubticker/zecbtc", z.cache, client, BitfinexDecoder{}, bp},
 		{"https://poloniex.com/public?command=returnTicker", z.cache, client, PoloniexDecoder{}, bp},
