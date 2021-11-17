@@ -33,9 +33,9 @@ type IpnsExtraConfig struct {
 type WalletsConfig struct {
 	BTC *CoinConfig `json:"BTC"`
 	BCH *CoinConfig `json:"BCH"`
-	// LTC *CoinConfig `json:"LTC"`
-	// ZEC *CoinConfig `json:"ZEC"`
-	// ETH *CoinConfig `json:"ETH"`
+	LTC *CoinConfig `json:"LTC"`
+	ZEC *CoinConfig `json:"ZEC"`
+	ETH *CoinConfig `json:"ETH"`
 	CFX *CoinConfig `json:"CFX"`
 }
 
@@ -98,17 +98,17 @@ func DefaultWalletsConfig() *WalletsConfig {
 			MaxFee:           200,
 			WalletOptions:    nil,
 		},
-		// LTC: &CoinConfig{
-		// 	Type:             WalletTypeAPI,
-		// 	APIPool:          CoinPoolLTC,
-		// 	APITestnetPool:   CoinPoolTLTC,
-		// 	FeeAPI:           "", // intentionally blank
-		// 	LowFeeDefault:    5,
-		// 	MediumFeeDefault: 10,
-		// 	HighFeeDefault:   20,
-		// 	MaxFee:           200,
-		// 	WalletOptions:    nil,
-		// },
+		LTC: &CoinConfig{
+			Type:             WalletTypeAPI,
+			APIPool:          CoinPoolLTC,
+			APITestnetPool:   CoinPoolTLTC,
+			FeeAPI:           "", // intentionally blank
+			LowFeeDefault:    5,
+			MediumFeeDefault: 10,
+			HighFeeDefault:   20,
+			MaxFee:           200,
+			WalletOptions:    nil,
+		},
 		// ZEC: &CoinConfig{
 		// 	Type:             WalletTypeAPI,
 		// 	APIPool:          CoinPoolZEC,

@@ -86,9 +86,9 @@ func NewMultiWallet(cfg *WalletConfig) (multiwallet.MultiWallet, error) {
 	// if cfg.ConfigFile.ZEC != nil && cfg.ConfigFile.ZEC.Type == "API" {
 	// 	enableAPIWallet[wallet.Zcash] = cfg.ConfigFile.ZEC
 	// }
-	// if cfg.ConfigFile.LTC != nil && cfg.ConfigFile.LTC.Type == "API" {
-	// 	enableAPIWallet[wallet.Litecoin] = cfg.ConfigFile.LTC
-	// }
+	if cfg.ConfigFile.LTC != nil && cfg.ConfigFile.LTC.Type == "API" {
+		enableAPIWallet[wallet.Litecoin] = cfg.ConfigFile.LTC
+	}
 	// enableAPIWallet[wallet.Ethereum] = cfg.ConfigFile.ETH
 	enableAPIWallet[wallet.Conflux] = cfg.ConfigFile.CFX
 
