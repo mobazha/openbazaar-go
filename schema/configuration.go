@@ -74,7 +74,7 @@ func (err malformedConfigError) Error() string {
 }
 
 func DefaultWalletsConfig() *WalletsConfig {
-	var feeAPI = "https://btc.fees.openbazaar.org"
+	var feeAPI = "https://btc.fees.mobazha.info"
 	return &WalletsConfig{
 		BTC: &CoinConfig{
 			Type:             WalletTypeAPI,

@@ -102,7 +102,7 @@ func NewDefaultConfig(coinTypes map[wallet.CoinType]bool, params *chaincfg.Param
 				//"https://test-insight.bitpay.com/api",
 			}
 		}
-		feeApi := "https://btc.fees.openbazaar.org"
+		feeApi := "https://btc.fees.mobazha.info"
 		db, _ := mockDB.GetDatastoreForWallet(wallet.Bitcoin)
 		btcCfg := CoinConfig{
 			CoinType:    wallet.Bitcoin,

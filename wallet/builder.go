@@ -306,8 +306,8 @@ func prepareAPICoinConfig(coin wallet.CoinType, override *schema.CoinConfig, wal
 		defaultConfig = defaultConfigSet.BTC
 	case wallet.BitcoinCash:
 		defaultConfig = defaultConfigSet.BCH
-	// case wallet.Litecoin:
-	// 	defaultConfig = defaultConfigSet.LTC
+	case wallet.Litecoin:
+		defaultConfig = defaultConfigSet.LTC
 	// case wallet.Zcash:
 	// 	defaultConfig = defaultConfigSet.ZEC
 	// case wallet.Ethereum:
@@ -355,7 +355,7 @@ func prepareAPICoinConfig(coin wallet.CoinType, override *schema.CoinConfig, wal
 		preparedConfig.ClientAPIs = defaultWalletEndpoints
 	}
 	if preparedConfig.CoinType == wallet.Bitcoin && preparedConfig.FeeAPI == "" {
-		preparedConfig.FeeAPI = "https://btc.fees.openbazaar.org"
+		preparedConfig.FeeAPI = "https://btc.fees.mobazha.info"
 	}
 	if len(preparedConfig.Options) == 0 {
 		preparedConfig.Options = defaultCoinOptions
