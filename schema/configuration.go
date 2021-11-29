@@ -34,8 +34,8 @@ type WalletsConfig struct {
 	BTC *CoinConfig `json:"BTC"`
 	BCH *CoinConfig `json:"BCH"`
 	LTC *CoinConfig `json:"LTC"`
-	ZEC *CoinConfig `json:"ZEC"`
-	ETH *CoinConfig `json:"ETH"`
+	// ZEC *CoinConfig `json:"ZEC"`
+	// ETH *CoinConfig `json:"ETH"`
 	CFX *CoinConfig `json:"CFX"`
 }
 
