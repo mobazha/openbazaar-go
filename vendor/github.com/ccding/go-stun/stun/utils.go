@@ -45,19 +45,19 @@ func isLocalAddress(local, localRemote string) bool {
 	if err == nil && addr.IP != nil && !addr.IP.IsUnspecified() {
 		return addr.IP.Equal(localRemoteAddr.IP)
 	}
-	// Fallback to checking IPs of all interfaces
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return false
-	}
-	for _, addr := range addrs {
-		ip, _, err := net.ParseCIDR(addr.String())
-		if err != nil {
-			continue
-		}
-		if ip.Equal(localRemoteAddr.IP) {
-			return true
-		}
-	}
+	// // Fallback to checking IPs of all interfaces
+	// addrs, err := net.InterfaceAddrs()
+	// if err != nil {
+	// 	return false
+	// }
+	// for _, addr := range addrs {
+	// 	ip, _, err := net.ParseCIDR(addr.String())
+	// 	if err != nil {
+	// 		continue
+	// 	}
+	// 	if ip.Equal(localRemoteAddr.IP) {
+	// 		return true
+	// 	}
+	// }
 	return false
 }

@@ -384,10 +384,13 @@ func WrapPacketConn(pc net.PacketConn) (PacketConn, error) {
 
 // InterfaceMultiaddrs will return the addresses matching net.InterfaceAddrs
 func InterfaceMultiaddrs() ([]ma.Multiaddr, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return nil, err
-	}
+	// addrs, err := net.InterfaceAddrs()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	addrs := []net.Addr{}
+	var err error
 
 	maddrs := make([]ma.Multiaddr, len(addrs))
 	for i, a := range addrs {
