@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/op/go-logging"
 	"io"
 	"log"
 	"math/big"
 	"strconv"
 	"time"
+
+	"github.com/op/go-logging"
 
 	wi "github.com/OpenBazaar/wallet-interface"
 	"github.com/btcsuite/btcd/chaincfg"
